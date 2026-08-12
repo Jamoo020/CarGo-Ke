@@ -8,6 +8,10 @@ import CustomerDashboardPage from "../pages/CustomerDashboardPage";
 import CustomerRequestsPage from "../pages/CustomerRequestsPage";
 import CreateTransportRequestPage from "../pages/CreateTransportRequestPage";
 import TransportRequestDetailPage from "../pages/TransportRequestDetailPage";
+import DriverDashboardPage from "../pages/DriverDashboardPage";
+import DriverQuotesPage from "../pages/DriverQuotesPage";
+import DriverTripsPage from "../pages/DriverTripsPage";
+import DriverTripDetailPage from "../pages/DriverTripDetailPage";
 
 export default function AppRoutes() {
   return (
@@ -21,7 +25,10 @@ export default function AppRoutes() {
         <Route path="/customer/requests" element={<RoleRoute allowedRoles={["CUSTOMER", "AUTHORIZED_REPRESENTATIVE"]}><CustomerRequestsPage /></RoleRoute>} />
         <Route path="/customer/requests/new" element={<RoleRoute allowedRoles={["CUSTOMER", "AUTHORIZED_REPRESENTATIVE"]}><CreateTransportRequestPage /></RoleRoute>} />
         <Route path="/customer/requests/:requestId" element={<RoleRoute allowedRoles={["CUSTOMER", "AUTHORIZED_REPRESENTATIVE"]}><TransportRequestDetailPage /></RoleRoute>} />
-        <Route path="/driver" element={<RoleRoute allowedRoles={["DRIVER"]}><PlaceholderScreen title="Driver Dashboard" /></RoleRoute>} />
+        <Route path="/driver" element={<RoleRoute allowedRoles={["DRIVER"]}><DriverDashboardPage /></RoleRoute>} />
+        <Route path="/driver/requests" element={<RoleRoute allowedRoles={["DRIVER"]}><DriverQuotesPage /></RoleRoute>} />
+        <Route path="/driver/trips" element={<RoleRoute allowedRoles={["DRIVER"]}><DriverTripsPage /></RoleRoute>} />
+        <Route path="/driver/trips/:tripId" element={<RoleRoute allowedRoles={["DRIVER"]}><DriverTripDetailPage /></RoleRoute>} />
         <Route path="/admin" element={<RoleRoute allowedRoles={["ADMIN"]}><PlaceholderScreen title="Admin Dashboard" /></RoleRoute>} />
       </Route>
 
