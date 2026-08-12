@@ -308,3 +308,175 @@ select {
 .quote-item small {
   max-width: 260px;
 }
+
+.status-text {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.request-item-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+  width: 100%;
+}
+
+.request-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.request-item-route {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.route-arrow {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.request-item-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.request-id,
+.request-date {
+  display: inline;
+}
+
+.request-item-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.status-requested {
+  background: #dbeafe;
+  color: #0369a1;
+}
+
+.status-quoting {
+  background: #fef08a;
+  color: #9a3412;
+}
+
+.status-driver_selected {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.status-payment_pending {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.status-booked {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-pickup_pending {
+  background: #f3e8ff;
+  color: #5b21b6;
+}
+
+.status-pickup_inspection {
+  background: #fce7f3;
+  color: #831843;
+}
+
+.status-trip_start_pending {
+  background: #f3e8ff;
+  color: #5b21b6;
+}
+
+.status-trip_active {
+  background: #fbbf24;
+  color: #78350f;
+}
+
+.status-in_transit {
+  background: #fbbf24;
+  color: #78350f;
+}
+
+.status-delivery_pending {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.status-delivered {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-cancelled {
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.status-disputed {
+  background: #fed7aa;
+  color: #92400e;
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  background: #dc2626;
+  color: #fff;
+}
+
+.danger-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.action-panel {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+  flex-wrap: wrap;
+}
+
+input:disabled,
+button:disabled {
+  opacity: 0.6;
+}
+

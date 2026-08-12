@@ -1,10 +1,19 @@
 export type TransportRequestStatus =
   | "REQUESTED"
   | "QUOTING"
+  | "DRIVER_SELECTED"
+  | "PAYMENT_PENDING"
   | "BOOKED"
+  | "PICKUP_PENDING"
+  | "PICKUP_INSPECTION"
+  | "TRIP_START_PENDING"
+  | "TRIP_ACTIVE"
   | "IN_TRANSIT"
+  | "DELIVERY_PENDING"
+  | "DELIVERED"
   | "COMPLETED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "DISPUTED";
 
 export interface TransportRequest {
   id: string;
