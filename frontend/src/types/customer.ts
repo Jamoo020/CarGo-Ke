@@ -15,6 +15,10 @@ export type TransportRequestStatus =
   | "CANCELLED"
   | "DISPUTED";
 
+export type TripStatus = TransportRequestStatus;
+
+export type QuoteStatus = "PENDING" | "SELECTED" | "REJECTED" | string;
+
 export interface TransportRequest {
   id: string;
   customerId: string;
@@ -42,10 +46,30 @@ export interface TransportRequestQuote {
   driverId: string;
   amount: number;
   message: string;
-  status: string;
+  status: QuoteStatus | string;
   createdAt: string;
   updatedAt: string;
   driver?: TransportRequestQuoteDriver;
+}
+
+export interface Trip {
+  id: string;
+  transportRequestId: string;
+  customerId?: string | null;
+  authorizedRepresentativeId?: string | null;
+  driverId: string;
+  vehicleDetailId: string;
+  status: TripStatus | string;
+  bookingAmount: number;
+  driverFee: number;
+  fuelBudget?: number | null;
+  carGoFee?: number | null;
+  driverAmountReleased: number;
+  driverAmountRemaining: number;
+  refundAmount: number;
+  createdAt: string;
+  updatedAt: string;
+  transportRequest?: TransportRequest | null;
 }
 
 export interface TransportRequestQueryResponse {
@@ -58,6 +82,14 @@ export interface TransportRequestDetailResponse {
 
 export interface TransportRequestQuoteResponse {
   data: TransportRequestQuote[];
+}
+
+export interface TripQueryResponse {
+  data: Trip[];
+}
+
+export interface TripDetailResponse {
+  data: Trip;
 }
 
 export interface TransportRequestCreatePayload {

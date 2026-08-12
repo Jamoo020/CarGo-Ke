@@ -1,5 +1,15 @@
 import { apiGet, apiPost } from "./api";
-import { TransportRequest, TransportRequestCreatePayload, TransportRequestDetailResponse, TransportRequestQueryResponse, TransportRequestQuote, TransportRequestQuoteResponse } from "../types/customer";
+import {
+  TransportRequest,
+  TransportRequestCreatePayload,
+  TransportRequestDetailResponse,
+  TransportRequestQueryResponse,
+  TransportRequestQuote,
+  TransportRequestQuoteResponse,
+  Trip,
+  TripQueryResponse,
+  TripDetailResponse,
+} from "../types/customer";
 
 export function getTransportRequests() {
   return apiGet<TransportRequestQueryResponse>("/api/transport-requests");
@@ -23,4 +33,12 @@ export function getTransportRequestQuotes(transportRequestId: string) {
 
 export function selectQuote(quoteId: string) {
   return apiPost<{ data: TransportRequestQuote }>(`/api/quotes/${quoteId}/select`, {});
+}
+
+export function getTrips() {
+  return apiGet<TripQueryResponse>("/api/trips");
+}
+
+export function getTrip(tripId: string) {
+  return apiGet<TripDetailResponse>(`/api/trips/${tripId}`);
 }

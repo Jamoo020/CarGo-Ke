@@ -12,6 +12,7 @@ const mockGetTransportRequest = vi.fn();
 const mockCancelTransportRequest = vi.fn();
 const mockGetTransportRequestQuotes = vi.fn();
 const mockSelectQuote = vi.fn();
+const mockGetTrips = vi.fn();
 
 vi.mock("../lib/auth", async () => {
   const actual = await vi.importActual<typeof import("../lib/auth")>("../lib/auth");
@@ -31,6 +32,7 @@ vi.mock("../lib/customer", async () => {
     cancelTransportRequest: (...args: Parameters<typeof actual.cancelTransportRequest>) => mockCancelTransportRequest(...args),
     getTransportRequestQuotes: (...args: Parameters<typeof actual.getTransportRequestQuotes>) => mockGetTransportRequestQuotes(...args),
     selectQuote: (...args: Parameters<typeof actual.selectQuote>) => mockSelectQuote(...args),
+    getTrips: (...args: Parameters<typeof actual.getTrips>) => mockGetTrips(...args),
   };
 });
 
@@ -44,6 +46,7 @@ beforeEach(() => {
   mockCancelTransportRequest.mockReset();
   mockGetTransportRequestQuotes.mockReset();
   mockSelectQuote.mockReset();
+  mockGetTrips.mockReset();
 
   mockGetCurrentUser.mockResolvedValue({
     data: {
@@ -370,11 +373,197 @@ describe("customer foundation workflow", () => {
       expect(screen.getByText(/Nairobi/i)).toBeInTheDocument();
     });
 
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     await userEvent.click(screen.getByRole("button", { name: /select quote/i }));
 
     await waitFor(() => {
       expect(mockSelectQuote).toHaveBeenCalledWith("quote-1");
     });
+    confirmSpy.mockRestore();
+  });
+
+  it("loads the trip summary when a request is already DRIVER_SELECTED", async () => {
+    localStorage.setItem("cargo_kenya_token", "stored-token");
+    mockGetTransportRequest.mockResolvedValueOnce({
+      data: {
+        id: "req-trip-1",
+        customerId: "cust-1",
+        authorizedRepresentativeId: null,
+        vehicleDetailId: "veh-1",
+        origin: "Nairobi",
+        destination: "Mombasa",
+        status: "DRIVER_SELECTED",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    });
+    mockGetTransportRequestQuotes.mockResolvedValue({ data: [] });
+    mockGetTrips.mockResolvedValue({
+      data: [
+        {
+          id: "trip-1",
+          transportRequestId: "req-trip-1",
+          bookingAmount: 5500,
+          driverFee: 1500,
+          fuelBudget: 300,
+          carGoFee: 200,
+          refundAmount: 0,
+          status: "BOOKED",
+          createdAt: "2024-01-02T00:00:00.000Z",
+          updatedAt: "2024-01-02T00:00:00.000Z",
+          transportRequest: {
+            id: "req-trip-1",
+            origin: "Nairobi",
+            destination: "Mombasa",
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+            customerId: "cust-1",
+            authorizedRepresentativeId: null,
+            vehicleDetailId: "veh-1",
+            status: "DRIVER_SELECTED",
+          },
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/customer/requests/req-trip-1"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Trip ID/i)).toBeInTheDocument();
+      expect(screen.getByText(/^trip-1$/)).toBeInTheDocument();
+      expect(screen.getByText(/KSh 5500/i)).toBeInTheDocument();
+    });
+  });
+
+  it("discovers the trip after selecting a quote", async () => {
+    localStorage.setItem("cargo_kenya_token", "stored-token");
+    mockGetTransportRequest.mockResolvedValueOnce({
+      data: {
+        id: "req-3",
+        customerId: "cust-1",
+        authorizedRepresentativeId: null,
+        vehicleDetailId: "veh-3",
+        origin: "Nairobi",
+        destination: "Mombasa",
+        status: "QUOTING",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    });
+    mockGetTransportRequest.mockResolvedValueOnce({
+      data: {
+        id: "req-3",
+        customerId: "cust-1",
+        authorizedRepresentativeId: null,
+        vehicleDetailId: "veh-3",
+        origin: "Nairobi",
+        destination: "Mombasa",
+        status: "DRIVER_SELECTED",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    });
+    mockGetTransportRequestQuotes.mockResolvedValueOnce({
+      data: [
+        {
+          id: "quote-1",
+          transportRequestId: "req-3",
+          driverId: "drv-1",
+          amount: 2500,
+          message: "Available today",
+          status: "PENDING",
+          createdAt: "2024-01-01T00:00:00.000Z",
+          updatedAt: "2024-01-01T00:00:00.000Z",
+          driver: {
+            id: "drv-1",
+            user: { id: "user-drv-1", fullName: "Driver One", role: "DRIVER" },
+          },
+        },
+      ],
+    });
+    mockGetTransportRequestQuotes.mockResolvedValueOnce({
+      data: [
+        {
+          id: "quote-1",
+          transportRequestId: "req-3",
+          driverId: "drv-1",
+          amount: 2500,
+          message: "Available today",
+          status: "SELECTED",
+          createdAt: "2024-01-01T00:00:00.000Z",
+          updatedAt: "2024-01-01T00:00:00.000Z",
+          driver: {
+            id: "drv-1",
+            user: { id: "user-drv-1", fullName: "Driver One", role: "DRIVER" },
+          },
+        },
+      ],
+    });
+    mockSelectQuote.mockResolvedValue({
+      data: {
+        id: "quote-1",
+        transportRequestId: "req-3",
+        driverId: "drv-1",
+        amount: 2500,
+        message: "Available today",
+        status: "SELECTED",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    });
+    mockGetTrips.mockResolvedValue({
+      data: [
+        {
+          id: "trip-2",
+          transportRequestId: "req-3",
+          bookingAmount: 5500,
+          driverFee: 1500,
+          fuelBudget: 300,
+          carGoFee: 200,
+          refundAmount: 0,
+          status: "BOOKED",
+          createdAt: "2024-01-02T00:00:00.000Z",
+          updatedAt: "2024-01-02T00:00:00.000Z",
+          transportRequest: {
+            id: "req-3",
+            origin: "Nairobi",
+            destination: "Mombasa",
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+            customerId: "cust-1",
+            authorizedRepresentativeId: null,
+            vehicleDetailId: "veh-3",
+            status: "DRIVER_SELECTED",
+          },
+        },
+      ],
+    });
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(
+      <MemoryRouter initialEntries={["/customer/requests/req-3"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/select quote/i)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /select quote/i }));
+
+    await waitFor(() => {
+      expect(mockSelectQuote).toHaveBeenCalledWith("quote-1");
+      expect(screen.getByText(/Trip ID/i)).toBeInTheDocument();
+      expect(screen.getByText(/trip-2/i)).toBeInTheDocument();
+    });
+
+    confirmSpy.mockRestore();
   });
 
   it("shows loading state when fetching request details", async () => {

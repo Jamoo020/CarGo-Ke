@@ -293,6 +293,7 @@ select {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .quote-item {
@@ -303,6 +304,61 @@ select {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.quote-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.quote-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.quote-badge-selected {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.quote-badge-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.quote-status-selected {
+  border-color: #d1fae5;
+  background: #ecfdf5;
+}
+
+.quote-status-rejected {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.quote-status-pending {
+  border-color: #fef9c3;
+  background: #fefce8;
+}
+
+.trip-summary-card {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.trip-summary-card h2 {
+  margin-top: 0;
 }
 
 .quote-item small {
