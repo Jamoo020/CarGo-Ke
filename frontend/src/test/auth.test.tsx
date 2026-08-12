@@ -65,6 +65,7 @@ describe("frontend auth flows", () => {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/customer" element={<div>customer page</div>} />
           </Routes>
         </AuthProvider>
       </MemoryRouter>,
@@ -103,17 +104,26 @@ describe("frontend auth flows", () => {
 
   it("token storage persists and logout clears it", async () => {
     localStorage.setItem("cargo_kenya_token", "stored-token");
+    mockGetCurrentUser.mockResolvedValue({
+      data: {
+        id: "u1",
+        email: "customer@example.com",
+        fullName: "Customer User",
+        role: "CUSTOMER",
+        accountStatus: "ACTIVE",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    });
 
     render(
-      <MemoryRouter initialEntries={['/login']}>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
+      <MemoryRouter initialEntries={['/customer']}>
+        <App />
       </MemoryRouter>,
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/^CarGo Kenya$/i)).toBeInTheDocument();
+      expect(screen.getByText("Customer Dashboard")).toBeInTheDocument();
     });
 
     const logoutButton = screen.getByRole("button", { name: /logout/i });

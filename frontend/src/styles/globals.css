@@ -29,6 +29,10 @@ button, input, select, textarea {
   font: inherit;
 }
 
+button, a {
+  transition: all 0.15s ease-in-out;
+}
+
 .app-shell {
   min-height: 100vh;
   display: flex;
@@ -45,10 +49,29 @@ button, input, select, textarea {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
-.brand {
-  font-size: 1.2rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.topbar a,
+.link-button,
+.primary-link-button,
+.secondary-link-button {
+  color: #ffffff;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.user-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.875rem;
 }
 
 .page-shell {
@@ -71,7 +94,217 @@ button, input, select, textarea {
   font-size: clamp(1.8rem, 2vw, 2.2rem);
 }
 
-.screen-card p {
-  margin: 0;
+.screen-card h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.screen-card p,
+.screen-card li,
+.screen-card small,
+.screen-card span,
+.screen-card dd,
+.screen-card dt {
   color: #4b5563;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4f46e5;
+  margin-bottom: 0.35rem;
+}
+
+.page-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.page-header-row.compact {
+  margin-bottom: 1rem;
+}
+
+.dashboard-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.info-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f9fafb;
+}
+
+.info-panel a,
+.empty-state a {
+  color: #4338ca;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.stack-list {
+  padding-left: 1.2rem;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.primary-button,
+.primary-link-button,
+.secondary-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+
+.primary-button,
+.primary-link-button {
+  background: #4338ca;
+  color: #fff;
+  text-decoration: none;
+}
+
+.primary-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.secondary-link-button {
+  background: #e5e7eb;
+  color: #111827;
+  text-decoration: none;
+}
+
+.small-button {
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.form-card form,
+.stack-form {
+  display: grid;
+  gap: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 0.45rem;
+  color: #111827;
+  font-weight: 600;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 0.8rem 0.9rem;
+  background: #fff;
+  color: #111827;
+}
+
+.error-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.request-list,
+.quote-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.request-item,
+.quote-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f9fafb;
+}
+
+.request-item a,
+.quote-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.request-item strong,
+.quote-item strong {
+  color: #111827;
+}
+
+.empty-state {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 0;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.detail-list div {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: #f9fafb;
+}
+
+.detail-list dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+}
+
+.detail-list dd {
+  margin: 0;
+  font-weight: 700;
+  color: #111827;
+}
+
+.quote-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.quote-item {
+  align-items: center;
+}
+
+.quote-item div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.quote-item small {
+  max-width: 260px;
 }
