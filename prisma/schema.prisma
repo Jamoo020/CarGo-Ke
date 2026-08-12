@@ -1,0 +1,452 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                          String                   @id @default(uuid())
+  email                       String                   @unique
+  passwordHash                String
+  fullName                    String?
+  role                        UserRole
+  accountStatus               AccountStatus            @default(ACTIVE)
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
+  transportRequests           TransportRequest[]       @relation("CustomerRequests")
+  authoredTrips               Trip[]                   @relation("CustomerTrips")
+  payments                    Payment[]
+  refunds                     Refund[]                 @relation("UserRefunds")
+  disputes                    Dispute[]                @relation("CustomerDisputes")
+  raisedDisputes              Dispute[]                @relation("RaisedBy")
+  cancellations               Cancellation[]           @relation("UserCancellation")
+  driverProfile               Driver?                  @relation("UserDriverProfile")
+  driverProfileId             String?                  @unique
+  authorizedTransportRequests TransportRequest[]       @relation("AuthorizedRepresentativeRequests")
+  authorizedRepresentedTrips  Trip[]                   @relation("AuthorizedRepresentativeTrips")
+  representativeLinks         CustomerRepresentative[] @relation("RepresentativeLinks")
+  representativeOf            CustomerRepresentative[] @relation("CustomerLinks")
+  createdMilestones           TripMilestone[]
+}
+
+enum UserRole {
+  ADMIN
+  CUSTOMER
+  DRIVER
+  AUTHORIZED_REPRESENTATIVE
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum DriverVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum TripStatus {
+  REQUESTED
+  QUOTING
+  DRIVER_SELECTED
+  PAYMENT_PENDING
+  BOOKED
+  PICKUP_PENDING
+  PICKUP_INSPECTION
+  TRIP_START_PENDING
+  TRIP_ACTIVE
+  IN_TRANSIT
+  DELIVERY_PENDING
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum RefundStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum DisputeResolutionType {
+  FULL_REFUND
+  PARTIAL_REFUND
+  DRIVER_PENALTY
+  NO_ACTION
+}
+
+enum DisputeCategory {
+  VEHICLE_CONDITION
+  DRIVER_CONDUCT
+  PAYMENT
+  FUEL
+  DELIVERY
+  DESTINATION
+  DAMAGE
+  OTHER
+}
+
+enum DisputePriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum WalletTransactionType {
+  PAYMENT_RECEIVED
+  REFUND
+  REFUND_OUT
+  DRIVER_FIRST_RELEASE
+  DRIVER_FINAL_RELEASE
+  DRIVER_REVERSAL
+  DRIVER_ADJUSTMENT
+  ADJUSTMENT
+}
+
+model CustomerRepresentative {
+  id               String    @id @default(uuid())
+  customer         User      @relation("CustomerLinks", fields: [customerId], references: [id])
+  customerId       String
+  representative   User      @relation("RepresentativeLinks", fields: [representativeId], references: [id])
+  representativeId String
+  status           String
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+
+  @@unique([customerId, representativeId])
+}
+
+model VehicleDetail {
+  id                 String             @id @default(uuid())
+  make               String
+  model              String
+  year               Int
+  registrationNumber String
+  color              String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  transportRequests  TransportRequest[]
+  trips              Trip[]
+
+  @@unique([registrationNumber, year])
+}
+
+model TransportRequest {
+  id                         String        @id @default(uuid())
+  customer                   User          @relation("CustomerRequests", fields: [customerId], references: [id])
+  customerId                 String
+  authorizedRepresentative   User?         @relation("AuthorizedRepresentativeRequests", fields: [authorizedRepresentativeId], references: [id])
+  authorizedRepresentativeId String?
+  vehicleDetail              VehicleDetail @relation(fields: [vehicleDetailId], references: [id])
+  vehicleDetailId            String
+  origin                     String
+  destination                String
+  status                     TripStatus    @default(REQUESTED)
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+  quotes                     DriverQuote[]
+  trip                       Trip?
+}
+
+model Driver {
+  id                   String                    @id @default(uuid())
+  user                 User                      @relation("UserDriverProfile", fields: [userId], references: [id])
+  userId               String                    @unique
+  licenseNumber        String?
+  verified             Boolean                   @default(false)
+  verificationStatus   DriverVerificationStatus  @default(PENDING)
+  verificationReason   String?
+  verificationNotes    String?
+  lastReviewedByUserId String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  quotes               DriverQuote[]
+  trips                Trip[]
+  inspections          Inspection[]
+  gpsLocations         GpsLocation[]
+  wallet               DriverWallet?             @relation("DriverWalletToDriver")
+}
+
+model DriverQuote {
+  id                 String           @id @default(uuid())
+  transportRequest   TransportRequest @relation(fields: [transportRequestId], references: [id])
+  transportRequestId String
+  driver             Driver           @relation(fields: [driverId], references: [id])
+  driverId           String
+  amount             Float
+  message            String?
+  status             String           @default("PENDING")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model Trip {
+  id                         String           @id @default(uuid())
+  transportRequest           TransportRequest @relation(fields: [transportRequestId], references: [id])
+  transportRequestId         String           @unique
+  customer                   User?            @relation("CustomerTrips", fields: [customerId], references: [id])
+  customerId                 String?
+  authorizedRepresentative   User?            @relation("AuthorizedRepresentativeTrips", fields: [authorizedRepresentativeId], references: [id])
+  authorizedRepresentativeId String?
+  driver                     Driver           @relation(fields: [driverId], references: [id])
+  driverId                   String
+  vehicleDetail              VehicleDetail    @relation(fields: [vehicleDetailId], references: [id])
+  vehicleDetailId            String
+  status                     TripStatus       @default(REQUESTED)
+  bookingAmount              Float
+  driverFee                  Float
+  fuelBudget                 Float?
+  carGoFee                   Float?
+  driverAmountReleased       Float            @default(0)
+  driverAmountRemaining      Float            @default(0)
+  refundAmount               Float            @default(0)
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+  payment                    Payment?
+  tripWallet                 TripWallet?
+  dispute                    Dispute?
+  refunds                    Refund[]         @relation("TripRefunds")
+  cancellation               Cancellation?    @relation("TripCancellation")
+  inspections                Inspection[]
+  gpsLocations               GpsLocation[]
+  milestones                 TripMilestone[]
+}
+
+enum InspectionType {
+  PICKUP
+  DELIVERY
+}
+
+model Inspection {
+  id                String         @id @default(uuid())
+  trip              Trip           @relation(fields: [tripId], references: [id])
+  tripId            String
+  type              InspectionType
+  driver            Driver         @relation(fields: [driverId], references: [id])
+  driverId          String
+  photoUrls         Json
+  odometer          Float
+  fuelLevel         Float?
+  vehicleCondition  String
+  damageNotes       String?
+  observations      String?
+  handoverConfirmed Boolean
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@unique([tripId, type])
+  @@index([tripId])
+  @@index([driverId])
+}
+
+enum MilestoneType {
+  PICKUP_COMPLETED
+  TRIP_STARTED
+  FUEL_STOP
+  ROUTE_MILESTONE
+  DELAY
+  DESTINATION_REACHED
+  DELIVERY_INSPECTION_STARTED
+  DELIVERY_COMPLETED
+  OTHER
+}
+
+model GpsLocation {
+  id        String   @id @default(uuid())
+  trip      Trip     @relation(fields: [tripId], references: [id])
+  tripId    String
+  driver    Driver   @relation(fields: [driverId], references: [id])
+  driverId  String
+  latitude  Float
+  longitude Float
+  timestamp DateTime
+  accuracy  Float?
+  createdAt DateTime @default(now())
+
+  @@index([tripId])
+  @@index([driverId])
+  @@map("GPSLocation")
+}
+
+model TripMilestone {
+  id          String        @id @default(uuid())
+  trip        Trip          @relation(fields: [tripId], references: [id])
+  tripId      String
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  createdById String
+  type        MilestoneType
+  eventTime   DateTime      @default(now())
+  latitude    Float?
+  longitude   Float?
+  accuracy    Float?
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  @@index([tripId])
+  @@index([createdById])
+}
+
+model TripWallet {
+  id                    String              @id @default(uuid())
+  trip                  Trip                @relation(fields: [tripId], references: [id])
+  tripId                String              @unique
+  customerPaymentAmount Float
+  refundAmount          Float               @default(0)
+  driverFee             Float               @default(0)
+  fuelBudget            Float               @default(0)
+  carGoFee              Float               @default(0)
+  driverAmountReleased  Float               @default(0)
+  driverAmountRemaining Float               @default(0)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  transactions          WalletTransaction[]
+}
+
+model DriverWallet {
+  id               String              @id @default(uuid())
+  driver           Driver              @relation("DriverWalletToDriver", fields: [driverId], references: [id])
+  driverId         String              @unique
+  availableBalance Float               @default(0)
+  pendingBalance   Float               @default(0)
+  totalEarned      Float               @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  transactions     WalletTransaction[]
+
+  @@index([driverId])
+}
+
+model WalletTransaction {
+  id             String                @id @default(uuid())
+  tripWallet     TripWallet?           @relation(fields: [tripWalletId], references: [id])
+  tripWalletId   String?
+  driverWallet   DriverWallet?         @relation(fields: [driverWalletId], references: [id])
+  driverWalletId String?
+  payment        Payment?              @relation(fields: [paymentId], references: [id])
+  paymentId      String?
+  refund         Refund?               @relation("RefundTransactions", fields: [refundId], references: [id])
+  refundId       String?
+  type           WalletTransactionType
+  amount         Float
+  note           String?
+  createdAt      DateTime              @default(now())
+
+  @@index([tripWalletId])
+  @@index([driverWalletId])
+  @@index([paymentId])
+  @@index([refundId])
+}
+
+model Payment {
+  id                        String              @id @default(uuid())
+  trip                      Trip                @relation(fields: [tripId], references: [id])
+  tripId                    String              @unique
+  customer                  User                @relation(fields: [customerId], references: [id])
+  customerId                String
+  amount                    Float
+  status                    PaymentStatus       @default(PENDING)
+  providerReference         String?             @unique
+  providerCallbackReference String?             @unique
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  transactions              WalletTransaction[]
+  refunds                   Refund[]            @relation("PaymentRefunds")
+}
+
+model Refund {
+  id                 String              @id @default(uuid())
+  trip               Trip                @relation("TripRefunds", fields: [tripId], references: [id])
+  tripId             String
+  payment            Payment             @relation("PaymentRefunds", fields: [paymentId], references: [id])
+  paymentId          String
+  customer           User                @relation("UserRefunds", fields: [customerId], references: [id])
+  customerId         String
+  walletTransactions WalletTransaction[] @relation("RefundTransactions")
+  amount             Float
+  status             RefundStatus        @default(PENDING)
+  reason             String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+model Cancellation {
+  id            String     @id @default(uuid())
+  trip          Trip       @relation("TripCancellation", fields: [tripId], references: [id])
+  tripId        String     @unique
+  initiatedBy   User       @relation("UserCancellation", fields: [initiatedById], references: [id])
+  initiatedById String
+  initiatorRole UserRole
+  reason        String
+  statusBefore  TripStatus
+  statusAfter   TripStatus @default(CANCELLED)
+  refundAmount  Float      @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model Dispute {
+  id                String                 @id @default(uuid())
+  trip              Trip                   @relation(fields: [tripId], references: [id])
+  tripId            String                 @unique
+  customer          User                   @relation("CustomerDisputes", fields: [customerId], references: [id])
+  customerId        String
+  raisedBy          User?                  @relation("RaisedBy", fields: [raisedById], references: [id])
+  raisedById        String?
+  raisedByRole      UserRole?
+  description       String?
+  category          DisputeCategory?
+  priority          DisputePriority?
+  status            DisputeStatus          @default(OPEN)
+  resolutionType    DisputeResolutionType?
+  resolutionAmount  Float?
+  resolutionSummary String?
+  resolvedAt        DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  actorId       String?
+  entity        String
+  entityId      String
+  action        String
+  capability    String?
+  previousState String?
+  newState      String?
+  reason        String?
+  result        String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+}
+
+model PlatformSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
