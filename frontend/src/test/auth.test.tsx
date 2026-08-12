@@ -265,6 +265,61 @@ describe("frontend auth flows", () => {
     });
   });
 
+  it("shows role-aware navigation for authenticated customers", async () => {
+    localStorage.setItem("cargo_kenya_token", "stored-token");
+    mockGetCurrentUser.mockResolvedValue({
+      data: {
+        id: "u1",
+        email: "customer@example.com",
+        fullName: "Customer User",
+        role: "CUSTOMER",
+        accountStatus: "ACTIVE",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/customer']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Customer Dashboard")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("link", { name: /view my requests/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /users/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the unauthorized screen with a dashboard link for authenticated users", async () => {
+    localStorage.setItem("cargo_kenya_token", "stored-token");
+    mockGetCurrentUser.mockResolvedValue({
+      data: {
+        id: "u1",
+        email: "customer@example.com",
+        fullName: "Customer User",
+        role: "CUSTOMER",
+        accountStatus: "ACTIVE",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/unauthorized']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/You are signed in as/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("link", { name: /Back to Dashboard/i })).toHaveAttribute("href", "/customer");
+  });
+
   it("registration behavior matches backend contract", async () => {
     mockRegister.mockResolvedValue({
       data: {

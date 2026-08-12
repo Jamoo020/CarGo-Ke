@@ -46,10 +46,10 @@ export default function DriverQuotesPage() {
     }
   }
 
-  if (loading) return <p>Loading quotes...</p>;
   return (
     <div>
       <h2>My Quotes</h2>
+      {loading && <p>Loading quotes...</p>}
       {error && <p className="error">{error}</p>}
       {success && <p className="success">{success}</p>}
       <ul>
@@ -65,14 +65,14 @@ export default function DriverQuotesPage() {
 
       <h3>Submit a quote</h3>
       <form onSubmit={handleSubmit}>
-        <label>
+        <label htmlFor="driver-quote-request-id">
           Transport Request ID
-          <input value={formRequestId} onChange={(e) => setFormRequestId(e.target.value)} />
         </label>
-        <label>
+        <input id="driver-quote-request-id" aria-label="Transport Request ID" value={formRequestId} onChange={(e) => setFormRequestId(e.target.value)} />
+        <label htmlFor="driver-quote-amount">
           Amount
-          <input type="number" value={formAmount} onChange={(e) => setFormAmount(Number(e.target.value))} />
         </label>
+        <input id="driver-quote-amount" aria-label="Amount" type="number" value={formAmount} onChange={(e) => setFormAmount(Number(e.target.value))} />
         <button type="submit" disabled={submitting || !formRequestId || formAmount <= 0}>{submitting ? "Submitting..." : "Submit Quote"}</button>
       </form>
     </div>
