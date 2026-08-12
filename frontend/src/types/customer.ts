@@ -92,6 +92,63 @@ export interface TripDetailResponse {
   data: Trip;
 }
 
+export type PaymentStatus = "PENDING" | "CONFIRMED" | "FAILED" | string;
+
+export interface Payment {
+  id: string;
+  tripId: string;
+  customerId: string;
+  amount: number;
+  status: PaymentStatus | string;
+  providerReference?: string | null;
+  providerCallbackReference?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentResponse {
+  data: Payment;
+}
+
+export interface TripPaymentResponse {
+  data: Payment;
+}
+
+export type DisputeStatus = "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "CLOSED" | string;
+export type DisputeCategory =
+  | "VEHICLE_CONDITION"
+  | "DRIVER_CONDUCT"
+  | "PAYMENT"
+  | "FUEL"
+  | "DELIVERY"
+  | "DESTINATION"
+  | "DAMAGE"
+  | "OTHER"
+  | string;
+export type DisputePriority = "LOW" | "NORMAL" | "HIGH" | string;
+
+export interface Dispute {
+  id: string;
+  tripId: string;
+  customerId: string;
+  raisedById?: string | null;
+  raisedByRole?: string | null;
+  description?: string | null;
+  category?: DisputeCategory | null;
+  priority?: DisputePriority | null;
+  status: DisputeStatus | string;
+  resolutionType?: string | null;
+  resolutionAmount?: number | null;
+  resolutionSummary?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DisputeResponse {
+  data: Dispute;
+}
+
 export interface TransportRequestCreatePayload {
   origin: string;
   destination: string;

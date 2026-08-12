@@ -9,6 +9,9 @@ import {
   Trip,
   TripQueryResponse,
   TripDetailResponse,
+  PaymentResponse,
+  TripPaymentResponse,
+  DisputeResponse,
 } from "../types/customer";
 
 export function getTransportRequests() {
@@ -41,4 +44,20 @@ export function getTrips() {
 
 export function getTrip(tripId: string) {
   return apiGet<TripDetailResponse>(`/api/trips/${tripId}`);
+}
+
+export function createPayment(tripId: string, payload: { providerReference?: string }) {
+  return apiPost<PaymentResponse>(`/api/trips/${tripId}/payments`, payload);
+}
+
+export function getTripPayment(tripId: string) {
+  return apiGet<TripPaymentResponse>(`/api/trips/${tripId}/payments`);
+}
+
+export function createDispute(tripId: string, payload: { description: string; category?: string; priority?: string }) {
+  return apiPost<DisputeResponse>(`/api/trips/${tripId}/disputes`, payload);
+}
+
+export function getDispute(disputeId: string) {
+  return apiGet<DisputeResponse>(`/api/disputes/${disputeId}`);
 }
