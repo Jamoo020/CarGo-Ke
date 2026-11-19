@@ -14,6 +14,7 @@ import adminRoutes from "./routes/adminRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
+app.set("trust proxy", 1);
 
 app.use(express.json({
   verify: (req, _res, buf) => {
