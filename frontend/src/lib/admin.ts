@@ -52,7 +52,16 @@ export function listTrips(params: { status?: string; search?: string } = {}) {
 }
 
 export function getTrip(tripId: string) {
-  return apiGet<{ data: Trip }>(`/api/admin/trips/${tripId}`);
+  return apiGet<{
+    data: Trip & {
+      tripWallet: {
+        driverCompensationReleased: number;
+        driverCompensationRemaining: number;
+        releaseAccountingVersion: number;
+        fuelAccountingStatus: string;
+      } | null;
+    };
+  }>(`/api/admin/trips/${tripId}`);
 }
 
 export function listPayments(params: { status?: string; search?: string } = {}) {

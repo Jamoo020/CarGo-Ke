@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getUser, updateUserStatus } from "../../lib/admin";
+import { formatDisplayName, formatStatus } from "../../lib/presentation";
 
 export default function UserDetailPage() {
   const { userId } = useParams();
@@ -59,17 +60,17 @@ export default function UserDetailPage() {
 
   return (
     <div>
-      <h2>User {user.email}</h2>
-      <p>Name: {user.fullName}</p>
-      <p>Role: {user.role}</p>
-      <p>Account status: {user.accountStatus}</p>
+      <h2>{formatDisplayName(user.fullName, "User details")}</h2>
+      <p>Email: {user.email}</p>
+      <p>Role: {formatStatus(user.role)}</p>
+      <p>Account status: {formatStatus(user.accountStatus)}</p>
 
       <h3>Update account status</h3>
       <form onSubmit={handleUpdate}>
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="ACTIVE">ACTIVE</option>
-          <option value="SUSPENDED">SUSPENDED</option>
-          <option value="DEACTIVATED">DEACTIVATED</option>
+          <option value="ACTIVE">{formatStatus("ACTIVE")}</option>
+          <option value="SUSPENDED">{formatStatus("SUSPENDED")}</option>
+          <option value="DEACTIVATED">{formatStatus("DEACTIVATED")}</option>
         </select>
         <div>
           <label>Reason (optional)</label>

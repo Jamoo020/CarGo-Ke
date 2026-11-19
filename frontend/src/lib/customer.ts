@@ -46,8 +46,16 @@ export function getTrip(tripId: string) {
   return apiGet<TripDetailResponse>(`/api/trips/${tripId}`);
 }
 
+export function confirmTripCompletion(tripId: string) {
+  return apiPost<TripDetailResponse>(`/api/trips/${tripId}/completion-confirmations`, {});
+}
+
 export function createPayment(tripId: string, payload: { providerReference?: string }) {
   return apiPost<PaymentResponse>(`/api/trips/${tripId}/payments`, payload);
+}
+
+export function confirmPayment(paymentId: string, payload: { providerCallbackReference?: string } = {}) {
+  return apiPost<PaymentResponse>(`/api/payments/${paymentId}/confirm`, payload);
 }
 
 export function getTripPayment(tripId: string) {

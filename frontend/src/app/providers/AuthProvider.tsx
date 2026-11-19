@@ -10,6 +10,7 @@ import {
 import { ApiError, AuthState, User } from "../../types/auth";
 import { clearToken, getStoredToken, storeToken } from "../../lib/storage";
 import { getCurrentUser, login as loginRequest, logout as logoutRequest } from "../../lib/auth";
+import { disconnectSocket } from "../../lib/socket";
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<User>;
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError?.status === "401") {
+        disconnectSocket();
         clearToken();
         setToken(null);
         setUser(null);

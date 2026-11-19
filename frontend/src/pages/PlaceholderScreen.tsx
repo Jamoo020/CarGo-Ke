@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getDashboardPathForRole } from "../lib/roleAccess";
+import { formatStatus } from "../lib/presentation";
 
 interface PlaceholderScreenProps {
   title: string;
@@ -15,7 +16,7 @@ export default function PlaceholderScreen({ title, message }: PlaceholderScreenP
     <section className="screen-card">
       <h1>{title}</h1>
       <p>
-        {user ? `You are signed in as ${user.role}.` : "You are not signed in."}
+        {user ? `You are signed in as ${formatStatus(user.role)}.` : "You are not signed in."}
       </p>
       <p>{message ?? "You do not have permission to access this area."}</p>
       <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem", flexWrap: "wrap" }}>

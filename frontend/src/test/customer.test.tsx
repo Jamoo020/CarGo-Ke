@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import App from "../app/App";
+import TransportRequestDetailPage from "../pages/TransportRequestDetailPage";
 import { clearToken } from "../lib/storage";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetTransportRequests = vi.fn();
@@ -14,8 +15,12 @@ const mockGetTransportRequestQuotes = vi.fn();
 const mockSelectQuote = vi.fn();
 const mockGetTrips = vi.fn();
 const mockCreatePayment = vi.fn();
+const mockConfirmPayment = vi.fn();
 const mockGetTripPayment = vi.fn();
 const mockCreateDispute = vi.fn();
+const mockListTripInspections = vi.fn();
+
+vi.mock("../components/map/Map", () => ({ default: () => null }));
 
 vi.mock("../lib/auth", async () => {
   const actual = await vi.importActual<typeof import("../lib/auth")>("../lib/auth");
@@ -37,8 +42,18 @@ vi.mock("../lib/customer", async () => {
     selectQuote: (...args: Parameters<typeof actual.selectQuote>) => mockSelectQuote(...args),
     getTrips: (...args: Parameters<typeof actual.getTrips>) => mockGetTrips(...args),
     createPayment: (...args: Parameters<typeof actual.createPayment>) => mockCreatePayment(...args),
+    confirmPayment: (...args: Parameters<typeof actual.confirmPayment>) => mockConfirmPayment(...args),
     getTripPayment: (...args: Parameters<typeof actual.getTripPayment>) => mockGetTripPayment(...args),
     createDispute: (...args: Parameters<typeof actual.createDispute>) => mockCreateDispute(...args),
+  };
+});
+
+vi.mock("../lib/driver", async () => {
+  const actual = await vi.importActual<typeof import("../lib/driver")>("../lib/driver");
+  return {
+    ...actual,
+    listTripInspections: (...args: Parameters<typeof actual.listTripInspections>) =>
+      mockListTripInspections(...args),
   };
 });
 
@@ -54,8 +69,11 @@ beforeEach(() => {
   mockSelectQuote.mockReset();
   mockGetTrips.mockReset();
   mockCreatePayment.mockReset();
+  mockConfirmPayment.mockReset();
   mockGetTripPayment.mockReset();
   mockCreateDispute.mockReset();
+  mockListTripInspections.mockReset();
+  mockListTripInspections.mockResolvedValue({ data: [] });
 
   mockGetCurrentUser.mockResolvedValue({
     data: {
@@ -70,7 +88,100 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("customer foundation workflow", () => {
+  it("renders a development-only payment simulation control for a pending payment", async () => {
+    vi.stubEnv("DEV", true);
+    localStorage.setItem("cargo_kenya_token", "stored-token");
+
+    mockGetTransportRequest.mockResolvedValue({
+      data: {
+        id: "req-1",
+        customerId: "cust-1",
+        origin: "Nairobi",
+        destination: "Mombasa",
+        status: "DRIVER_SELECTED",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        travelDateTime: "2024-01-02T09:00:00.000Z",
+      },
+    });
+
+    mockGetTransportRequestQuotes.mockResolvedValue({
+      data: [
+        {
+          id: "quote-1",
+          status: "SELECTED",
+          amount: 1500,
+          createdAt: "2024-01-01T00:00:00.000Z",
+          driver: { user: { fullName: "Driver Alpha" } },
+        },
+      ],
+    });
+
+    mockGetTrips.mockResolvedValue({
+      data: [
+        {
+          id: "trip-1",
+          transportRequestId: "req-1",
+          status: "PAYMENT_PENDING",
+          bookingAmount: 1500,
+          driverFee: 1200,
+          refundAmount: 0,
+          driverId: "driver-1",
+          createdAt: "2024-01-01T00:00:00.000Z",
+          updatedAt: "2024-01-01T00:00:00.000Z",
+          transportRequest: {
+            id: "req-1",
+            origin: "Nairobi",
+            destination: "Mombasa",
+          },
+        },
+      ],
+    });
+
+    mockGetTripPayment.mockResolvedValue({
+      data: {
+        id: "pay-1",
+        tripId: "trip-1",
+        amount: 1500,
+        status: "PENDING",
+      },
+    });
+
+    mockConfirmPayment.mockResolvedValue({
+      data: {
+        id: "pay-1",
+        tripId: "trip-1",
+        amount: 1500,
+        status: "CONFIRMED",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/customer/requests/req-1"]}>
+        <Routes>
+          <Route path="/customer/requests/:requestId" element={<TransportRequestDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const simulationButton = await screen.findByRole("button", { name: /simulate successful payment/i });
+    await userEvent.click(simulationButton);
+
+    await waitFor(() => {
+      expect(mockConfirmPayment).toHaveBeenCalledWith(
+        "pay-1",
+        expect.objectContaining({ providerCallbackReference: expect.stringMatching(/^dev-confirm-/) }),
+      );
+    });
+
+    vi.unstubAllEnvs();
+  });
+
   it("renders the customer dashboard for an authenticated customer", async () => {
     localStorage.setItem("cargo_kenya_token", "stored-token");
     mockGetTransportRequests.mockResolvedValue({
@@ -84,7 +195,7 @@ describe("customer foundation workflow", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Customer Dashboard/i)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Good (morning|afternoon|evening).*Customer User/i })).toBeInTheDocument();
     });
   });
 
@@ -198,12 +309,12 @@ describe("customer foundation workflow", () => {
     await waitFor(() => {
       expect(screen.getByText(/Nairobi CBD/)).toBeInTheDocument();
       expect(screen.getByText(/Mombasa Port/)).toBeInTheDocument();
-      expect(screen.getByText(/req-123/)).toBeInTheDocument();
-      expect(screen.getByText(/QUOTING/)).toBeInTheDocument();
+      expect(screen.getByText(/REQUEST-REFERENCE/)).toBeInTheDocument();
+      expect(screen.getByText(/Awaiting quotes/)).toBeInTheDocument();
     });
   });
 
-  it("validates origin field when creating a transport request", async () => {
+  it("validates route selection when creating a transport request", async () => {
     localStorage.setItem("cargo_kenya_token", "stored-token");
 
     render(
@@ -212,15 +323,15 @@ describe("customer foundation workflow", () => {
       </MemoryRouter>,
     );
 
-    const submitButton = await screen.findByRole("button", { name: /create request/i });
-    await userEvent.click(submitButton);
+    const continueButton = await screen.findByRole("button", { name: /^Continue$/i });
+    await userEvent.click(continueButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/Origin is required/i)).toBeInTheDocument();
+      expect(screen.getByText(/Pickup and destination are required before continuing\./i)).toBeInTheDocument();
     });
   });
 
-  it("validates destination field when creating a transport request", async () => {
+  it("validates destination selection when creating a transport request", async () => {
     localStorage.setItem("cargo_kenya_token", "stored-token");
 
     render(
@@ -229,16 +340,17 @@ describe("customer foundation workflow", () => {
       </MemoryRouter>,
     );
 
-    const originInput = await screen.findByLabelText(/origin/i);
-    await userEvent.type(originInput, "Nairobi");
-    await userEvent.click(screen.getByRole("button", { name: /create request/i }));
+    const pickupInput = await screen.findByPlaceholderText(/search pickup location/i);
+    await userEvent.type(pickupInput, "Nairobi");
+    await userEvent.click(await screen.findByText(/Nairobi/i));
+    await userEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Destination is required/i)).toBeInTheDocument();
+      expect(screen.getByText(/Pickup and destination are required before continuing\./i)).toBeInTheDocument();
     });
   });
 
-  it("validates vehicleDetailId field when creating a transport request", async () => {
+  it("validates required vehicle metadata when creating a transport request", async () => {
     localStorage.setItem("cargo_kenya_token", "stored-token");
 
     render(
@@ -247,19 +359,20 @@ describe("customer foundation workflow", () => {
       </MemoryRouter>,
     );
 
-    const originInput = await screen.findByLabelText(/origin/i);
-    const destinationInput = await screen.findByLabelText(/destination/i);
-
-    await userEvent.type(originInput, "Nairobi");
-    await userEvent.type(destinationInput, "Mombasa");
-    await userEvent.click(screen.getByRole("button", { name: /create request/i }));
+    await userEvent.type(await screen.findByPlaceholderText(/search pickup location/i), "Nairobi");
+    await userEvent.click(await screen.findByText(/Nairobi/i));
+    await userEvent.type(await screen.findByPlaceholderText(/search destination location/i), "Mombasa");
+    await userEvent.click(await screen.findByText(/Mombasa/i));
+    await userEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Vehicle Detail ID is required/i)).toBeInTheDocument();
+      expect(screen.getByText(/Vehicle make, model, registration number, and year are required\./i)).toBeInTheDocument();
     });
   });
 
-  it("creates a request through the existing backend contract", async () => {
+  it("creates a request through the backend contract using vehicle metadata", async () => {
+    const user = userEvent.setup();
     localStorage.setItem("cargo_kenya_token", "stored-token");
     mockCreateTransportRequest.mockResolvedValue({
       data: {
@@ -267,8 +380,8 @@ describe("customer foundation workflow", () => {
         customerId: "cust-1",
         authorizedRepresentativeId: null,
         vehicleDetailId: "veh-99",
-        origin: "Kisumu",
-        destination: "Nakuru",
+        origin: "Kisumu reference point, Kenya",
+        destination: "Nakuru, Kenya",
         status: "REQUESTED",
         createdAt: "2024-01-01T00:00:00.000Z",
         updatedAt: "2024-01-01T00:00:00.000Z",
@@ -281,25 +394,54 @@ describe("customer foundation workflow", () => {
       </MemoryRouter>,
     );
 
-    const originInput = await screen.findByLabelText(/origin/i);
-    const destinationInput = await screen.findByLabelText(/destination/i);
-    const vehicleInput = await screen.findByLabelText(/vehicle detail id/i);
+    const pickupInput = await screen.findByPlaceholderText(/search pickup location/i);
+    const destinationInput = await screen.findByPlaceholderText(/search destination location/i);
 
-    await userEvent.type(originInput, "Kisumu");
-    await userEvent.type(destinationInput, "Nakuru");
-    await userEvent.type(vehicleInput, "veh-99");
-    await userEvent.click(screen.getByRole("button", { name: /create request/i }));
+    fireEvent.change(pickupInput, { target: { value: "Kisumu" } });
+    await user.click(await screen.findByRole("button", { name: /Use Kisumu reference point, Kenya/i }));
+    fireEvent.change(destinationInput, { target: { value: "Nakuru" } });
+    await user.click(await screen.findByRole("button", { name: /Use Nakuru reference point, Kenya/i }));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    const makeInput = screen.getByPlaceholderText(/e.g., Toyota/i);
+    const modelInput = screen.getByPlaceholderText(/e.g., Hilux/i);
+    const yearInput = screen.getByPlaceholderText(/e.g., 2022/i);
+    const registrationInput = screen.getByPlaceholderText(/e.g., KAB 123A/i);
+
+    await user.type(makeInput, "Toyota");
+    await user.type(modelInput, "Hilux");
+    await user.type(yearInput, "2022");
+    await user.type(registrationInput, "KAB 123A");
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Submit Transport Request$/i }));
 
     await waitFor(() => {
-      expect(mockCreateTransportRequest).toHaveBeenCalledWith({
-        origin: "Kisumu",
-        destination: "Nakuru",
-        vehicleDetailId: "veh-99",
-      });
+      expect(mockCreateTransportRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          origin: "Kisumu reference point, Kenya",
+          destination: "Nakuru reference point, Kenya",
+          pickupAddress: "Kisumu reference point, Kenya",
+          pickupLatitude: -0.1019,
+          pickupLongitude: 34.7617,
+          destinationAddress: "Nakuru reference point, Kenya",
+          destinationLatitude: -0.3031,
+          destinationLongitude: 36.0664,
+          make: "Toyota",
+          model: "Hilux",
+          year: 2022,
+          registrationNumber: "KAB 123A",
+        }),
+      );
+      const payload = mockCreateTransportRequest.mock.calls[0][0];
+      expect(payload).not.toHaveProperty("distanceMeters");
+      expect(payload).not.toHaveProperty("estimatedDurationSeconds");
+      expect(payload).not.toHaveProperty("routePolyline");
     });
   });
 
   it("shows error when request creation fails", async () => {
+    const user = userEvent.setup();
     localStorage.setItem("cargo_kenya_token", "stored-token");
     mockCreateTransportRequest.mockRejectedValue({
       error: "Vehicle not found",
@@ -312,17 +454,25 @@ describe("customer foundation workflow", () => {
       </MemoryRouter>,
     );
 
-    const originInput = await screen.findByLabelText(/origin/i);
-    const destinationInput = await screen.findByLabelText(/destination/i);
-    const vehicleInput = await screen.findByLabelText(/vehicle detail id/i);
+    const pickupInput = await screen.findByPlaceholderText(/search pickup location/i);
+    const destinationInput = await screen.findByPlaceholderText(/search destination location/i);
 
-    await userEvent.type(originInput, "Kisumu");
-    await userEvent.type(destinationInput, "Nakuru");
-    await userEvent.type(vehicleInput, "veh-missing");
-    await userEvent.click(screen.getByRole("button", { name: /create request/i }));
+    fireEvent.change(pickupInput, { target: { value: "Kisumu" } });
+    await user.click(await screen.findByRole("button", { name: /Use Kisumu reference point, Kenya/i }));
+    fireEvent.change(destinationInput, { target: { value: "Nakuru" } });
+    await user.click(await screen.findByRole("button", { name: /Use Nakuru reference point, Kenya/i }));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    await user.type(screen.getByPlaceholderText(/e.g., Toyota/i), "Toyota");
+    await user.type(screen.getByPlaceholderText(/e.g., Hilux/i), "Hilux");
+    await user.type(screen.getByPlaceholderText(/e.g., 2022/i), "2022");
+    await user.type(screen.getByPlaceholderText(/e.g., KAB 123A/i), "MISSING-123");
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Submit Transport Request$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Vehicle or resource not found/i)).toBeInTheDocument();
+      expect(screen.getByText(/Vehicle or resource not found\./i)).toBeInTheDocument();
     });
   });
 
@@ -379,16 +529,18 @@ describe("customer foundation workflow", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Nairobi/i)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Nairobi\s*→\s*Mombasa/i })).toBeInTheDocument();
+      expect(screen.getByText(/Available transport quotes/i)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Driver One/i })).toBeInTheDocument();
     });
 
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    await userEvent.click(screen.getByRole("button", { name: /select quote/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Accept quote/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Confirm quote/i }));
 
     await waitFor(() => {
       expect(mockSelectQuote).toHaveBeenCalledWith("quote-1");
+      expect(screen.getByText(/Quote accepted\./i)).toBeInTheDocument();
     });
-    confirmSpy.mockRestore();
   });
 
   it("loads the trip summary when a request is already DRIVER_SELECTED", async () => {
@@ -442,8 +594,8 @@ describe("customer foundation workflow", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Trip ID/i)).toBeInTheDocument();
-      expect(screen.getByText(/^trip-1$/)).toBeInTheDocument();
+      expect(screen.getByText(/Trip reference/i)).toBeInTheDocument();
+      expect(screen.getByText(/^TRIP-REFERENCE$/)).toBeInTheDocument();
       expect(screen.getByText(/KSh 5500/i)).toBeInTheDocument();
     });
   });
@@ -517,8 +669,8 @@ describe("customer foundation workflow", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Pay Now/i })).toBeInTheDocument();
-      expect(screen.getByText(/PAYMENT_PENDING/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Pay KSh 5500/i })).toBeInTheDocument();
+      expect(screen.getAllByText(/Payment pending/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -604,21 +756,118 @@ describe("customer foundation workflow", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Pay Now/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Pay KSh 6500/i })).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: /Pay Now/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Pay KSh 6500/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^M-Pesa$/i }));
+    await userEvent.type(screen.getByLabelText(/Phone Number/i), "0712345678");
+    await userEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
-      expect(mockCreatePayment).toHaveBeenCalledWith("trip-pay-2", {});
-      expect(screen.getByText(/Payment initiated/i)).toBeInTheDocument();
-      expect(screen.getByText(/payment-1/i)).toBeInTheDocument();
+      expect(mockCreatePayment).toHaveBeenCalledWith(
+        "trip-pay-2",
+        expect.objectContaining({
+          providerReference: expect.stringMatching(/^mpesa_/),
+        }),
+      );
+      expect(screen.getByText(/Payment record created/i)).toBeInTheDocument();
+      expect(screen.getByText(/PAYMENT-REFERENCE/i)).toBeInTheDocument();
       const paymentHeading = screen.getByRole("heading", { name: /Payment/i, level: 3 });
       expect(paymentHeading).toBeInTheDocument();
       const paymentCard = paymentHeading.closest("div");
       expect(paymentCard).toBeTruthy();
       expect(within(paymentCard as HTMLElement).getByText(/PENDING/i)).toBeInTheDocument();
     });
+  });
+
+  it("keeps pending payments read-only while awaiting provider confirmation", async () => {
+    vi.stubEnv("DEV", false);
+    localStorage.setItem("cargo_kenya_token", "stored-token");
+    mockGetTransportRequest.mockResolvedValueOnce({
+      data: {
+        id: "req-pay-confirm-1",
+        customerId: "cust-1",
+        authorizedRepresentativeId: null,
+        vehicleDetailId: "veh-1",
+        origin: "Nairobi",
+        destination: "Mombasa",
+        status: "DRIVER_SELECTED",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    });
+    mockGetTransportRequestQuotes.mockResolvedValue({
+      data: [
+        {
+          id: "quote-confirm-1",
+          transportRequestId: "req-pay-confirm-1",
+          driverId: "drv-confirm-1",
+          amount: 5500,
+          message: "Ready to go",
+          status: "SELECTED",
+          createdAt: "2024-01-01T00:00:00.000Z",
+          updatedAt: "2024-01-01T00:00:00.000Z",
+          driver: {
+            id: "drv-confirm-1",
+            user: { id: "user-drv-confirm-1", fullName: "Driver Confirm", role: "DRIVER" },
+          },
+        },
+      ],
+    });
+    mockGetTrips.mockResolvedValue({
+      data: [
+        {
+          id: "trip-pay-confirm-1",
+          transportRequestId: "req-pay-confirm-1",
+          bookingAmount: 5500,
+          driverFee: 1500,
+          fuelBudget: 300,
+          carGoFee: 200,
+          refundAmount: 0,
+          status: "PAYMENT_PENDING",
+          createdAt: "2024-01-02T00:00:00.000Z",
+          updatedAt: "2024-01-02T00:00:00.000Z",
+          transportRequest: {
+            id: "req-pay-confirm-1",
+            origin: "Nairobi",
+            destination: "Mombasa",
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+            customerId: "cust-1",
+            authorizedRepresentativeId: null,
+            vehicleDetailId: "veh-1",
+            status: "DRIVER_SELECTED",
+          },
+        },
+      ],
+    });
+    mockGetTripPayment.mockResolvedValue({
+      data: {
+        id: "payment-pending-1",
+        tripId: "trip-pay-confirm-1",
+        customerId: "cust-1",
+        amount: 5500,
+        status: "PENDING",
+        providerReference: "mpesa-1",
+        providerCallbackReference: null,
+        createdAt: "2024-01-02T00:00:00.000Z",
+        updatedAt: "2024-01-02T00:00:00.000Z",
+      },
+    });
+    render(
+      <MemoryRouter initialEntries={["/customer/requests/req-pay-confirm-1"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Waiting for trusted provider confirmation/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: /Confirm payment/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Simulate Successful Payment/i })).not.toBeInTheDocument();
+    expect(mockConfirmPayment).not.toHaveBeenCalled();
   });
 
   it("shows the dispute form when a trip is booked and no dispute exists", async () => {
@@ -692,6 +941,7 @@ describe("customer foundation workflow", () => {
       expect(screen.getByRole("button", { name: /Open dispute/i })).toBeInTheDocument();
       expect(screen.getByLabelText(/Description/i)).toBeInTheDocument();
     });
+    expect(mockListTripInspections).toHaveBeenCalledWith("trip-booked-1");
   });
 
   it("opens a dispute and shows dispute details", async () => {
@@ -794,8 +1044,8 @@ describe("customer foundation workflow", () => {
         priority: "NORMAL",
       });
       expect(screen.getByText(/Dispute opened successfully/i)).toBeInTheDocument();
-      expect(screen.getByText(/dispute-1/i)).toBeInTheDocument();
-      expect(screen.getByText(/^OPEN$/)).toBeInTheDocument();
+      expect(screen.getByText(/DISPUTE-REFERENCE/i)).toBeInTheDocument();
+      expect(screen.getByText(/^Open$/)).toBeInTheDocument();
     });
   });
 
@@ -982,8 +1232,6 @@ describe("customer foundation workflow", () => {
       ],
     });
 
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-
     render(
       <MemoryRouter initialEntries={["/customer/requests/req-3"]}>
         <App />
@@ -991,18 +1239,17 @@ describe("customer foundation workflow", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/select quote/i)).toBeInTheDocument();
+      expect(screen.getByText(/Compare driver offers/i)).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: /select quote/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Accept quote/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Confirm quote/i }));
 
     await waitFor(() => {
       expect(mockSelectQuote).toHaveBeenCalledWith("quote-1");
-      expect(screen.getByText(/Trip ID/i)).toBeInTheDocument();
-      expect(screen.getByText(/trip-2/i)).toBeInTheDocument();
+      expect(screen.getByText(/Trip reference/i)).toBeInTheDocument();
+      expect(screen.getByText(/TRIP-REFERENCE/i)).toBeInTheDocument();
     });
-
-    confirmSpy.mockRestore();
   });
 
   it("shows loading state when fetching request details", async () => {
@@ -1037,7 +1284,9 @@ describe("customer foundation workflow", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/Loading request/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.querySelector(".quote-market-loading")).toBeInTheDocument();
+    });
   });
 
   it("displays error when request detail fails to load", async () => {
@@ -1083,7 +1332,7 @@ describe("customer foundation workflow", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/IN_TRANSIT/)).toBeInTheDocument();
+      expect(screen.getByText(/In transit/)).toBeInTheDocument();
     });
   });
 
@@ -1342,7 +1591,7 @@ describe("customer foundation workflow", () => {
 
     // Verify the status is now CANCELLED
     await waitFor(() => {
-      expect(screen.getByText(/CANCELLED/)).toBeInTheDocument();
+      expect(screen.getByText(/Cancelled/)).toBeInTheDocument();
     });
   });
 
@@ -1424,7 +1673,7 @@ describe("customer foundation workflow", () => {
     });
 
     // Status should still be REQUESTED
-    expect(screen.getByText(/REQUESTED/)).toBeInTheDocument();
-    expect(screen.queryByText(/CANCELLED/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Requested/)).toBeInTheDocument();
+    expect(screen.queryByText(/Cancelled/)).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import App from "../app/App";
+import { formatReference } from "../lib/presentation";
 import { clearToken } from "../lib/storage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -69,7 +70,7 @@ describe("admin frontend integration flows", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /Admin Dashboard/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /CARGo Kenya Operations/i })).toBeInTheDocument();
     });
 
     expect(screen.getAllByRole("link", { name: /Users/i }).length).toBeGreaterThan(0);
@@ -107,10 +108,11 @@ describe("admin frontend integration flows", () => {
 
   it("navigates from the admin dashboard to the trips page and loads trip rows", async () => {
     localStorage.setItem("cargo_kenya_token", "token-123");
+    const tripId = "5738b245-b913-4863-b571-c79b10674576";
     mockListTrips.mockResolvedValue({
       data: [
         {
-          id: "trip-42",
+          id: tripId,
           status: "BOOKED",
           transportRequest: { origin: "Nairobi", destination: "Mombasa" },
         },
@@ -124,7 +126,7 @@ describe("admin frontend integration flows", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Admin Dashboard/i)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /CARGo Kenya Operations/i })).toBeInTheDocument();
     });
 
     const tripLinks = screen.getAllByRole("link", { name: /Trips/i });
@@ -134,7 +136,7 @@ describe("admin frontend integration flows", () => {
       expect(screen.getByRole("heading", { name: /Trips/i })).toBeInTheDocument();
     });
 
-    expect(await screen.findByText(/trip-42/i)).toBeInTheDocument();
+    expect(await screen.findByText(formatReference("trip", tripId))).toBeInTheDocument();
     expect(screen.getByText(/Nairobi/i)).toBeInTheDocument();
   });
 });

@@ -24,8 +24,28 @@ export interface TransportRequest {
   customerId: string;
   authorizedRepresentativeId?: string | null;
   vehicleDetailId: string;
+  vehicleDetail?: {
+    make: string;
+    model: string;
+    year: number;
+    color?: string | null;
+    engineCC?: number | null;
+    vehicleType?: string | null;
+    capacity?: number | null;
+  } | null;
   origin: string;
   destination: string;
+  travelDateTime?: string | null;
+  notes?: string | null;
+  pickupAddress?: string | null;
+  pickupLatitude?: number | null;
+  pickupLongitude?: number | null;
+  destinationAddress?: string | null;
+  destinationLatitude?: number | null;
+  destinationLongitude?: number | null;
+  distanceMeters?: number | null;
+  estimatedDurationSeconds?: number | null;
+  routePolyline?: string | null;
   status: TransportRequestStatus | string;
   createdAt: string;
   updatedAt: string;
@@ -45,6 +65,7 @@ export interface TransportRequestQuote {
   transportRequestId: string;
   driverId: string;
   amount: number;
+  fuelBudget?: number | null;
   message: string;
   status: QuoteStatus | string;
   createdAt: string;
@@ -66,9 +87,21 @@ export interface Trip {
   carGoFee?: number | null;
   driverAmountReleased: number;
   driverAmountRemaining: number;
+  driverCompletionConfirmedAt?: string | null;
+  driverCompletionConfirmedById?: string | null;
+  customerCompletionConfirmedAt?: string | null;
+  customerCompletionConfirmedById?: string | null;
+  tripWallet?: {
+    driverCompensationReleased: number;
+    driverCompensationRemaining: number;
+    releaseAccountingVersion: number;
+    fuelAccountingStatus: string;
+  } | null;
   refundAmount: number;
   createdAt: string;
   updatedAt: string;
+  customer?: { fullName: string | null } | null;
+  driver?: { user?: { fullName: string | null } | null } | null;
   transportRequest?: TransportRequest | null;
 }
 
@@ -152,6 +185,25 @@ export interface DisputeResponse {
 export interface TransportRequestCreatePayload {
   origin: string;
   destination: string;
-  vehicleDetailId: string;
+  pickupAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  destinationAddress: string;
+  destinationLatitude: number;
+  destinationLongitude: number;
+  distanceMeters?: number;
+  estimatedDurationSeconds?: number;
+  routePolyline?: string;
+  vehicleDetailId?: string;
   customerId?: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  registrationNumber?: string;
+  color?: string;
+  engineCC?: number;
+  vehicleType?: string;
+  capacity?: number;
+  travelDateTime?: string;
+  notes?: string;
 }

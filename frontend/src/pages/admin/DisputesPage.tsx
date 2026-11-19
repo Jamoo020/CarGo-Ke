@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getDispute, updateDispute } from "../../lib/admin";
+import { formatReference, formatStatus } from "../../lib/presentation";
 
 export default function DisputesPage() {
   const [disputeIdInput, setDisputeIdInput] = useState("");
@@ -42,7 +43,7 @@ export default function DisputesPage() {
       setError("A positive resolutionAmount is required for PARTIAL_REFUND.");
       return;
     }
-    if ((resolutionType === "FULL_REFUND" || resolutionType === "PARTIAL_REFUND") && !window.confirm("This will trigger a refund flow. Continue?")) {
+    if ((resolutionType === "FULL_REFUND" || resolutionType === "PARTIAL_REFUND") && !window.confirm("This records a pending refund request; it does not confirm that funds have been returned. Continue?")) {
       return;
     }
 
@@ -82,26 +83,26 @@ export default function DisputesPage() {
       {error && <p className="error">{error}</p>}
       {selected && (
         <form onSubmit={handleSubmit}>
-          <h3>Dispute {selected.id}</h3>
-          <p>Trip: {selected.tripId}</p>
+          <h3>{formatReference("dispute", selected.id)}</h3>
+          <p>Trip: {formatReference("trip", selected.tripId)}</p>
           <p>Description: {selected.description ?? "-"}</p>
           <div>
             <label>Status</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="OPEN">OPEN</option>
-              <option value="UNDER_REVIEW">UNDER_REVIEW</option>
-              <option value="RESOLVED">RESOLVED</option>
-              <option value="CLOSED">CLOSED</option>
+              <option value="OPEN">{formatStatus("OPEN")}</option>
+              <option value="UNDER_REVIEW">{formatStatus("UNDER_REVIEW")}</option>
+              <option value="RESOLVED">{formatStatus("RESOLVED")}</option>
+              <option value="CLOSED">{formatStatus("CLOSED")}</option>
             </select>
           </div>
           <div>
             <label>Resolution type</label>
             <select value={resolutionType} onChange={(e) => setResolutionType(e.target.value)}>
               <option value="">None</option>
-              <option value="FULL_REFUND">FULL_REFUND</option>
-              <option value="PARTIAL_REFUND">PARTIAL_REFUND</option>
-              <option value="DRIVER_PENALTY">DRIVER_PENALTY</option>
-              <option value="NO_ACTION">NO_ACTION</option>
+              <option value="FULL_REFUND">{formatStatus("FULL_REFUND")}</option>
+              <option value="PARTIAL_REFUND">{formatStatus("PARTIAL_REFUND")}</option>
+              <option value="DRIVER_PENALTY">{formatStatus("DRIVER_PENALTY")}</option>
+              <option value="NO_ACTION">{formatStatus("NO_ACTION")}</option>
             </select>
           </div>
           {(resolutionType === "PARTIAL_REFUND" || resolutionType === "FULL_REFUND") && (

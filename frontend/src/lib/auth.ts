@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from "./api";
 import { clearToken, getStoredToken, storeToken } from "./storage";
+import { disconnectSocket } from "./socket";
 import { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, User } from "../types/auth";
 
 export async function login(payload: LoginRequest) {
@@ -11,6 +12,7 @@ export async function login(payload: LoginRequest) {
 }
 
 export async function logout() {
+  disconnectSocket();
   clearToken();
 }
 

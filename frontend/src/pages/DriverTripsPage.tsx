@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listTrips } from "../lib/driver";
 import { Trip } from "../types/customer";
+import { formatDateTime, formatLocation, formatReference, formatStatus } from "../lib/presentation";
 
 export default function DriverTripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -29,21 +30,43 @@ export default function DriverTripsPage() {
     };
   }, []);
 
-  if (loading) return <p>Loading trips...</p>;
-
-  if (trips.length === 0) return <p>No assigned trips.</p>;
-
   return (
-    <div>
-      <h2>Assigned Trips</h2>
-      {error && <p className="error">{error}</p>}
-      <ul>
-        {trips.map((t) => (
-          <li key={t.id}>
-            <Link to={`/driver/trips/${t.id}`}>{t.id}</Link> — {t.transportRequest?.origin} → {t.transportRequest?.destination} — {t.status}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <section className="screen-card">
+      <div className="page-header-row compact">
+        <div>
+          <p className="eyebrow">Driver Portal</p>
+          <h1>Assigned Trips</h1>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="error-box">{error}</div>
+      ) : loading ? (
+        <p className="status-text">Loading trips…</p>
+      ) : trips.length === 0 ? (
+        <div className="empty-state"><p>No assigned trips yet.</p></div>
+      ) : (
+        <ul className="request-list">
+          {trips.map((t) => (
+            <li key={t.id} className="request-item">
+              <Link to={`/driver/trips/${t.id}`} className="request-item-link">
+                <div className="request-item-main">
+                  <strong>{formatReference("trip", t.id)}</strong>
+                  <div className="request-item-route">
+                    <span>{formatLocation(t.transportRequest?.pickupAddress || t.transportRequest?.origin, t.transportRequest?.pickupLatitude, t.transportRequest?.pickupLongitude)}</span>
+                    <span className="route-arrow">→</span>
+                    <span>{formatLocation(t.transportRequest?.destinationAddress || t.transportRequest?.destination, t.transportRequest?.destinationLatitude, t.transportRequest?.destinationLongitude)}</span>
+                  </div>
+                  <small>{formatDateTime(t.transportRequest?.travelDateTime ?? t.createdAt)}</small>
+                </div>
+                <div className="request-item-status">
+                  <span className={`status-badge status-${t.status?.toLowerCase() || "pending"}`}>{formatStatus(t.status)}</span>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

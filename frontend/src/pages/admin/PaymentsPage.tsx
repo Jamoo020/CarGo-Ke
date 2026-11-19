@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listPayments } from "../../lib/admin";
+import { formatReference, formatStatus } from "../../lib/presentation";
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([]);
@@ -28,30 +29,58 @@ export default function PaymentsPage() {
     return () => { mounted = false; };
   }, [status, search]);
 
-  if (loading) return <p>Loading payments...</p>;
-  if (error) return <p className="error">{error}</p>;
-
   return (
-    <div>
-      <h2>Payments</h2>
-      <div>
-        <input placeholder="Search payment or trip ID" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All status</option>
-          <option value="PENDING">PENDING</option>
-          <option value="CONFIRMED">CONFIRMED</option>
-          <option value="FAILED">FAILED</option>
-        </select>
+    <section className="screen-card">
+      <div className="page-header-row compact">
+        <div>
+          <p className="eyebrow">Admin</p>
+          <h1>Payments</h1>
+        </div>
       </div>
-      {payments.length === 0 ? <p>No payments found.</p> : (
-        <ul>
+
+      <div className="form-grid" style={{marginBottom: "1.5rem"}}>
+        <label>
+          <span>Search payment or trip</span>
+          <input placeholder="ID or reference..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </label>
+        <label>
+          <span>Status</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="PENDING">{formatStatus("PENDING")}</option>
+            <option value="CONFIRMED">{formatStatus("CONFIRMED")}</option>
+            <option value="FAILED">{formatStatus("FAILED")}</option>
+          </select>
+        </label>
+      </div>
+
+      {error ? (
+        <div className="error-box">{error}</div>
+      ) : loading ? (
+        <p className="status-text">Loading payments…</p>
+      ) : payments.length === 0 ? (
+        <div className="empty-state"><p>No payments found.</p></div>
+      ) : (
+        <ul className="request-list">
           {payments.map((payment) => (
-            <li key={payment.id}>
-              <Link to={`/admin/payments/${payment.id}`}>{payment.id}</Link> — {payment.status} — KSh {payment.amount} — Trip {payment.tripId}
+            <li key={payment.id} className="request-item">
+              <Link to={`/admin/payments/${payment.id}`} className="request-item-link">
+                <div className="request-item-main">
+                  <strong>{formatReference("payment", payment.id)}</strong>
+                  <div className="request-item-details">
+                    <span>KSh {payment.amount}</span>
+                    <span>•</span>
+                    <span>{formatReference("trip", payment.tripId)}</span>
+                  </div>
+                </div>
+                <div className="request-item-status">
+                  <span className={`status-badge status-${payment.status?.toLowerCase() || "pending"}`}>{formatStatus(payment.status)}</span>
+                </div>
+              </Link>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

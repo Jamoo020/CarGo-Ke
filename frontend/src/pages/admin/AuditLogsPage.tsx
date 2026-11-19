@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listAuditLogs } from "../../lib/admin";
+import { formatDateTime, formatReference, formatStatus } from "../../lib/presentation";
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -25,22 +26,38 @@ export default function AuditLogsPage() {
     return () => { mounted = false; };
   }, []);
 
-  if (loading) return <p>Loading audit logs...</p>;
-  if (error) return <p className="error">{error}</p>;
-
   return (
-    <div>
-      <h2>Audit Logs</h2>
-      {logs.length === 0 ? <p>No audit logs available.</p> : (
-        <ul>
+    <section className="screen-card">
+      <div className="page-header-row compact">
+        <div>
+          <p className="eyebrow">Admin</p>
+          <h1>Audit Logs</h1>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="error-box">{error}</div>
+      ) : loading ? (
+        <p className="status-text">Loading audit logs…</p>
+      ) : logs.length === 0 ? (
+        <div className="empty-state"><p>No audit logs available.</p></div>
+      ) : (
+        <ul className="request-list">
           {logs.map((log) => (
-            <li key={log.id}>
-              <strong>{log.action}</strong> — {log.entity} {log.entityId} — {new Date(log.createdAt).toLocaleString()}
-              {log.reason && <div>Reason: {log.reason}</div>}
+            <li key={log.id} className="request-item">
+              <div className="request-item-main">
+                <strong style={{color: "var(--navy-900)"}}>{formatStatus(log.action)}</strong>
+                <div className="request-item-details">
+                  <span>{formatStatus(log.entity)} {formatReference("record", log.entityId)}</span>
+                  <span>•</span>
+                  <span>{formatDateTime(log.createdAt)}</span>
+                </div>
+                {log.reason && <div style={{fontSize: "0.85rem", color: "var(--slate-500)", marginTop: "0.35rem"}}>Reason: {log.reason}</div>}
+              </div>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

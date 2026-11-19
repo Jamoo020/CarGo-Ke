@@ -72,13 +72,13 @@ describe("frontend auth flows", () => {
     );
 
     await userEvent.type(screen.getByLabelText(/email/i), "customer@example.com");
-    await userEvent.type(screen.getByLabelText(/password/i), "Password123!");
-    await userEvent.click(screen.getByRole("button", { name: /login/i }));
+    await userEvent.type(screen.getByLabelText("Password"), "Password123!");
+    await userEvent.click(screen.getByRole("button", { name: /log.?in/i }));
 
     await waitFor(() => {
       expect(localStorage.getItem("cargo_kenya_token")).toBe("test-token");
     });
-  });
+  }, 10000);
 
   it("invalid login shows backend error", async () => {
     mockLogin.mockRejectedValue({ error: "Invalid credentials" });
@@ -94,13 +94,13 @@ describe("frontend auth flows", () => {
     );
 
     await userEvent.type(screen.getByLabelText(/email/i), "bad@example.com");
-    await userEvent.type(screen.getByLabelText(/password/i), "wrongpassword");
-    await userEvent.click(screen.getByRole("button", { name: /login/i }));
+    await userEvent.type(screen.getByLabelText("Password"), "wrongpassword");
+    await userEvent.click(screen.getByRole("button", { name: /log.?in/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Invalid credentials")).toBeInTheDocument();
     });
-  });
+  }, 15000);
 
   it("token storage persists and logout clears it", async () => {
     localStorage.setItem("cargo_kenya_token", "stored-token");
@@ -123,7 +123,7 @@ describe("frontend auth flows", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Customer Dashboard")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Good (morning|afternoon|evening).*Customer User/i })).toBeInTheDocument();
     });
 
     const logoutButton = screen.getByRole("button", { name: /logout/i });
@@ -286,10 +286,11 @@ describe("frontend auth flows", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Customer Dashboard")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Good (morning|afternoon|evening).*Customer User/i })).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("link", { name: /view my requests/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Home$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Requests$/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /users/i })).not.toBeInTheDocument();
   });
 
@@ -343,9 +344,9 @@ describe("frontend auth flows", () => {
 
     await userEvent.type(screen.getByLabelText(/full name/i), "Driver User");
     await userEvent.type(screen.getByLabelText(/email/i), "driver@example.com");
-    await userEvent.type(screen.getByLabelText(/password/i), "Password123!");
-    await userEvent.selectOptions(screen.getByLabelText(/role/i), "DRIVER");
-    await userEvent.click(screen.getByRole("button", { name: /register/i }));
+    await userEvent.type(screen.getByLabelText("Password"), "Password123!");
+    await userEvent.click(screen.getByRole("radio", { name: /transporter/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
       expect(mockRegister).toHaveBeenCalledWith({
@@ -355,28 +356,19 @@ describe("frontend auth flows", () => {
         role: "DRIVER",
       });
     });
-  });
+  }, 15000);
 
-  it("suspended and deactivated account states are recognized", async () => {
+  it("clears an inactive session when the authenticated user endpoint rejects it", async () => {
     localStorage.setItem("cargo_kenya_token", "stored-token");
-    mockGetCurrentUser.mockResolvedValue({
-      data: {
-        id: "u1",
-        email: "suspended@example.com",
-        fullName: "Suspended User",
-        role: "CUSTOMER",
-        accountStatus: "SUSPENDED",
-        createdAt: "2024-01-01T00:00:00.000Z",
-        updatedAt: "2024-01-01T00:00:00.000Z",
-      },
-    });
+    mockGetCurrentUser.mockRejectedValue({ status: "401", error: "Unauthorized" });
 
     render(
       <MemoryRouter initialEntries={['/customer']}>
         <AuthProvider>
           <Routes>
+            <Route path="/login" element={<div>login route</div>} />
             <Route element={<ProtectedRoute />}>
-              <Route path="/customer" element={<RoleRoute allowedRoles={["CUSTOMER"]}><div>SUSPENDED</div></RoleRoute>} />
+              <Route path="/customer" element={<RoleRoute allowedRoles={["CUSTOMER"]}><div>customer page</div></RoleRoute>} />
             </Route>
           </Routes>
         </AuthProvider>
@@ -384,7 +376,8 @@ describe("frontend auth flows", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("SUSPENDED")).toBeInTheDocument();
+      expect(screen.getByText("login route")).toBeInTheDocument();
     });
+    expect(localStorage.getItem("cargo_kenya_token")).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listDrivers } from "../../lib/admin";
+import { formatDisplayName, formatStatus } from "../../lib/presentation";
 
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -25,30 +26,53 @@ export default function DriversPage() {
     return () => { mounted = false; };
   }, [status]);
 
-  if (loading) return <p>Loading drivers...</p>;
-  if (error) return <p className="error">{error}</p>;
-  if (drivers.length === 0) return <p>No drivers found.</p>;
-
   return (
-    <div>
-      <h2>Drivers</h2>
-      <div>
-        <label>Filter by verification status</label>
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All</option>
-          <option value="PENDING">PENDING</option>
-          <option value="APPROVED">APPROVED</option>
-          <option value="REJECTED">REJECTED</option>
-          <option value="SUSPENDED">SUSPENDED</option>
-        </select>
+    <section className="screen-card">
+      <div className="page-header-row compact">
+        <div>
+          <p className="eyebrow">Admin</p>
+          <h1>Drivers</h1>
+        </div>
       </div>
-      <ul>
-        {drivers.map((d) => (
-          <li key={d.id}>
-            <Link to={`/admin/drivers/${d.id}`}>{d.user?.fullName ?? d.user?.email ?? d.id}</Link> — {d.verificationStatus} — verified: {String(d.verified)}
-          </li>
-        ))}
-      </ul>
-    </div>
+
+      <div className="form-grid" style={{marginBottom: "1.5rem", gridTemplateColumns: "1fr auto"}}>
+        <label>
+          <span>Verification status</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All</option>
+            <option value="PENDING">{formatStatus("PENDING")}</option>
+            <option value="APPROVED">{formatStatus("APPROVED")}</option>
+            <option value="REJECTED">{formatStatus("REJECTED")}</option>
+            <option value="SUSPENDED">{formatStatus("SUSPENDED")}</option>
+          </select>
+        </label>
+      </div>
+
+      {error ? (
+        <div className="error-box">{error}</div>
+      ) : loading ? (
+        <p className="status-text">Loading drivers…</p>
+      ) : drivers.length === 0 ? (
+        <div className="empty-state"><p>No drivers found.</p></div>
+      ) : (
+        <ul className="request-list">
+          {drivers.map((d) => (
+            <li key={d.id} className="request-item">
+              <Link to={`/admin/drivers/${d.id}`} className="request-item-link">
+                <div className="request-item-main">
+                  <strong>{formatDisplayName(d.user?.fullName, "Driver name not provided")}</strong>
+                  <div className="request-item-details">
+                    <span>{d.verified ? "✓ Verified" : "○ Not verified"}</span>
+                  </div>
+                </div>
+                <div className="request-item-status">
+                  <span className={`status-badge status-${d.verificationStatus?.toLowerCase() || "pending"}`}>{formatStatus(d.verificationStatus)}</span>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

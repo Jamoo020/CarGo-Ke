@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { getTransportRequests } from "../lib/customer";
 import { TransportRequest } from "../types/customer";
 import { ApiError } from "../types/auth";
+import { formatLocation, formatReference, formatStatus } from "../lib/presentation";
 
 export default function CustomerRequestsPage() {
   const [requests, setRequests] = useState<TransportRequest[]>([]);
@@ -77,12 +78,12 @@ export default function CustomerRequestsPage() {
               <Link to={`/customer/requests/${request.id}`} className="request-item-link">
                 <div className="request-item-main">
                   <div className="request-item-route">
-                    <strong>{request.origin}</strong>
+                    <strong>{formatLocation(request.pickupAddress || request.origin, request.pickupLatitude, request.pickupLongitude)}</strong>
                     <span className="route-arrow">→</span>
-                    <strong>{request.destination}</strong>
+                    <strong>{formatLocation(request.destinationAddress || request.destination, request.destinationLatitude, request.destinationLongitude)}</strong>
                   </div>
                   <div className="request-item-details">
-                    <span className="request-id">ID: {request.id}</span>
+                    <span className="request-id">{formatReference("request", request.id)}</span>
                     {request.createdAt && (
                       <span className="request-date">{formatDate(request.createdAt)}</span>
                     )}
@@ -90,7 +91,7 @@ export default function CustomerRequestsPage() {
                 </div>
                 <div className="request-item-status">
                   <span className={`status-badge status-${request.status.toLowerCase()}`}>
-                    {request.status}
+                    {formatStatus(request.status)}
                   </span>
                 </div>
               </Link>

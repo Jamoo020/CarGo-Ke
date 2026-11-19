@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPayment } from "../../lib/admin";
+import { formatDateTime, formatDisplayName, formatReference, formatStatus } from "../../lib/presentation";
 
 export default function PaymentDetailPage() {
   const { paymentId } = useParams();
@@ -39,15 +40,15 @@ export default function PaymentDetailPage() {
 
   return (
     <div>
-      <h2>Payment {payment.id}</h2>
-      <p>Trip: {payment.tripId}</p>
-      <p>Customer: {payment.customerId}</p>
-      <p>Status: {payment.status}</p>
+      <h2>{formatReference("payment", payment.id)}</h2>
+      <p>Trip: {formatReference("trip", payment.tripId)}</p>
+      <p>Customer: {formatDisplayName(payment.customer?.fullName, "Customer name not provided")}</p>
+      <p>Status: {formatStatus(payment.status)}</p>
       <p>Amount: KSh {payment.amount}</p>
       <p>Provider reference: {payment.providerReference ?? "-"}</p>
       <p>Provider callback reference: {payment.providerCallbackReference ?? "-"}</p>
-      <p>Created: {new Date(payment.createdAt).toLocaleString()}</p>
-      <p>Updated: {new Date(payment.updatedAt).toLocaleString()}</p>
+      <p>Created: {formatDateTime(payment.createdAt)}</p>
+      <p>Updated: {formatDateTime(payment.updatedAt)}</p>
     </div>
   );
 }

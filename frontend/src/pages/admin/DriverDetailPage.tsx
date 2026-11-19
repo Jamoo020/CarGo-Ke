@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { approveDriver, getDriver, rejectDriver, reactivateDriver, suspendDriver } from "../../lib/admin";
+import { formatDisplayName, formatStatus } from "../../lib/presentation";
 
 const DRIVER_TRANSITIONS: Record<string, string[]> = {
   PENDING: ["APPROVED", "REJECTED"],
@@ -85,10 +86,10 @@ export default function DriverDetailPage() {
 
   return (
     <div>
-      <h2>Driver {driver.user?.fullName ?? driver.user?.email ?? driver.id}</h2>
+      <h2>{formatDisplayName(driver.user?.fullName, "Driver details")}</h2>
       <p>Email: {driver.user?.email}</p>
-      <p>Verification status: {status}</p>
-      <p>Verified: {String(driver.verified)}</p>
+      <p>Verification status: {formatStatus(status)}</p>
+      <p>Verified: {driver.verified ? "Yes" : "No"}</p>
       {driver.verificationReason && <p>Reason: {driver.verificationReason}</p>}
       {driver.verificationNotes && <p>Notes: {driver.verificationNotes}</p>}
 
