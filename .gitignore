@@ -10,3 +10,13 @@ npm-debug.log*
 scripts/test-admin-workflow.js
 scripts/debug/
 scripts/create-dev-admin.ts
+uploads/
+uploads/
+~$*
+check-db-connection.js
+check-inspections.js
+check-trips-detailed.js
+manual-trip-advance.js
+test-curl-upload.js
+test-inspection-flow.js
+test-inspection-improved.js
