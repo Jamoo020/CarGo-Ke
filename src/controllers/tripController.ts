@@ -6,6 +6,7 @@ import {
   listTrips,
   transitionTripStatus,
 } from "../services/tripService";
+import { confirmTripCompletion } from "../services/completionService";
 import { AppError } from "../errors/AppError";
 
 export async function listTripsController(req: AuthRequest, res: Response, next: NextFunction) {
@@ -37,9 +38,22 @@ export async function transitionTripController(req: AuthRequest, res: Response, 
     if (!req.user) {
       throw new AppError("Unauthorized", 401);
     }
+
     const { action } = req.body;
     const updatedTrip = await transitionTripStatus(req.params.tripId, action, req.user, req.body);
     res.status(200).json({ data: updatedTrip, allowedActions: getAllowedTripTransitionActions() });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function confirmTripCompletionController(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) {
+      throw new AppError("Unauthorized", 401);
+    }
+    const trip = await confirmTripCompletion(req.params.tripId, req.user);
+    res.status(200).json({ data: trip });
   } catch (error) {
     next(error);
   }

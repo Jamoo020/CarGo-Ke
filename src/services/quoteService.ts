@@ -11,7 +11,49 @@ const ELIGIBLE_REQUEST_STATUSES: TripStatus[] = [TripStatus.REQUESTED, TripStatu
 
 export interface QuotePayload {
   amount: number;
+  fuelBudget?: number;
   message?: string;
+}
+
+export function roundCurrency(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+export function calculateTripFinancials(driverFee: number, fuelBudget: number = 0) {
+  const toMinorUnits = (value: number) => Math.round((value + Number.EPSILON) * 100);
+  const safeDriverFee = toMinorUnits(Number.isFinite(driverFee) ? Math.max(0, driverFee) : 0);
+  const safeFuelBudget = toMinorUnits(Number.isFinite(fuelBudget) ? Math.max(0, fuelBudget) : 0);
+  const subtotal = safeDriverFee + safeFuelBudget;
+  const carGoFee = Math.round(subtotal * 0.07);
+  const bookingAmount = subtotal + carGoFee;
+
+  return {
+    driverFee: safeDriverFee / 100,
+    fuelBudget: safeFuelBudget / 100,
+    carGoFee: carGoFee / 100,
+    subtotal: subtotal / 100,
+    bookingAmount: bookingAmount / 100,
+    totalDriverEntitlement: safeDriverFee / 100,
+  };
+}
+
+export function calculateDriverReleasePlan(driverFee: number, fuelBudget: number = 0) {
+  const financials = calculateTripFinancials(driverFee, fuelBudget);
+  const driverFeeMinorUnits = Math.round(financials.driverFee * 100);
+  const firstReleaseMinorUnits = Math.round(driverFeeMinorUnits * 0.3);
+  const finalReleaseMinorUnits = driverFeeMinorUnits - firstReleaseMinorUnits;
+  const firstRelease = firstReleaseMinorUnits / 100;
+  const finalRelease = finalReleaseMinorUnits / 100;
+  const totalDriverEntitlement = financials.totalDriverEntitlement;
+  const totalRelease = (firstReleaseMinorUnits + finalReleaseMinorUnits) / 100;
+
+  return {
+    firstRelease,
+    finalRelease,
+    totalDriverEntitlement,
+    totalRelease,
+    fuelAllocation: financials.fuelBudget,
+  };
 }
 
 export interface CurrentUser {
@@ -112,6 +154,11 @@ export async function createDriverQuote(
   }
 
   const driver = await getDriverForCurrentUser(currentUser);
+  const normalizedFuelBudget = Number.isFinite(Number(payload.fuelBudget)) ? Number(payload.fuelBudget) : 0;
+
+  if (normalizedFuelBudget < 0) {
+    throw new AppError("fuelBudget must be a non-negative number", 400);
+  }
 
   const existingQuote = await prisma.driverQuote.findFirst({
     where: {
@@ -129,7 +176,8 @@ export async function createDriverQuote(
       data: {
         transportRequestId,
         driverId: driver.id,
-        amount: payload.amount,
+        amount: Number(payload.amount),
+        fuelBudget: normalizedFuelBudget,
         message: payload.message,
         status: QUOTE_STATUS_PENDING,
       },
@@ -276,6 +324,10 @@ export async function selectQuote(quoteId: string, currentUser: CurrentUser) {
       data: { status: QUOTE_STATUS_REJECTED },
     });
 
+    const normalizedDriverFee = Number.isFinite(Number(quote.amount)) ? Number(quote.amount) : 0;
+    const normalizedFuelBudget = Number.isFinite(Number(quote.fuelBudget ?? 0)) ? Number(quote.fuelBudget ?? 0) : 0;
+    const tripFinancials = calculateTripFinancials(normalizedDriverFee, normalizedFuelBudget);
+
     await tx.trip.create({
       data: {
         transportRequestId: transportRequest.id,
@@ -284,12 +336,12 @@ export async function selectQuote(quoteId: string, currentUser: CurrentUser) {
         driverId: quote.driverId,
         vehicleDetailId: transportRequest.vehicleDetailId,
         status: TripStatus.PAYMENT_PENDING,
-        bookingAmount: quote.amount,
-        driverFee: quote.amount,
-        fuelBudget: 0,
-        carGoFee: 0,
+        bookingAmount: tripFinancials.bookingAmount,
+        driverFee: tripFinancials.driverFee,
+        fuelBudget: tripFinancials.fuelBudget,
+        carGoFee: tripFinancials.carGoFee,
         driverAmountReleased: 0,
-        driverAmountRemaining: quote.amount,
+        driverAmountRemaining: tripFinancials.totalDriverEntitlement,
         refundAmount: 0,
       },
     });

@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
+import crypto from "crypto";
 import { prisma } from "../db";
 import { AppError } from "../errors/AppError";
-import { PaymentStatus, RefundStatus, UserRole, WalletTransactionType } from "@prisma/client";
+import { PaymentStatus, RefundStatus, UserRole } from "@prisma/client";
 import { CurrentUser, verifyTripParticipation } from "./authorizationService";
 
 export interface RefundPayload {
@@ -51,7 +52,18 @@ export async function createRefundTx(
     throw new AppError("Refund reason must not exceed 500 characters", 400);
   }
 
-  const alreadyRefunded = payment.refunds.reduce((sum, refund) => sum + refund.amount, 0);
+  const requestKey = `refund-request:${payment.id}:${crypto
+    .createHash("sha256")
+    .update(`${amount}\n${reason}`)
+    .digest("hex")}`;
+  const existingRequest = await tx.refund.findUnique({ where: { requestKey } });
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const alreadyRefunded = payment.refunds
+    .filter((refund) => refund.status !== RefundStatus.FAILED)
+    .reduce((sum, refund) => sum + refund.amount, 0);
   const refundableAmount = payment.amount - alreadyRefunded;
 
   if (refundableAmount <= 0) {
@@ -75,16 +87,11 @@ export async function createRefundTx(
     data: { refundAmount: tripWallet.refundAmount + amount },
   });
 
-  if (updatedTripWalletCount.count === 0) {
+  if (updatedTripWalletCount.count !== 1) {
     throw new AppError(
       "Refund could not be completed due to concurrent modification. Please retry.",
       409,
     );
-  }
-
-  const updatedTripWallet = await tx.tripWallet.findUnique({ where: { id: tripWallet.id } });
-  if (!updatedTripWallet) {
-    throw new AppError("Trip wallet not found after update", 500);
   }
 
   const refund = await tx.refund.create({
@@ -95,29 +102,9 @@ export async function createRefundTx(
       amount,
       status: RefundStatus.PENDING,
       reason,
+      requestKey,
     },
   });
 
-  await tx.walletTransaction.create({
-    data: {
-      tripWalletId: updatedTripWallet.id,
-      paymentId: payment.id,
-      refundId: refund.id,
-      type: WalletTransactionType.REFUND,
-      amount,
-      note: reason,
-    },
-  });
-
-  const completedRefund = await tx.refund.update({
-    where: { id: refund.id },
-    data: { status: RefundStatus.COMPLETED },
-  });
-
-  await tx.trip.update({
-    where: { id: tripId },
-    data: { refundAmount: { increment: amount } },
-  });
-
-  return completedRefund;
+  return refund;
 }

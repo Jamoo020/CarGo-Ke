@@ -16,6 +16,7 @@ export async function createTripMilestone(
   tripId: string,
   payload: CreateTripMilestonePayload,
   currentUser: CurrentUser,
+  ioEmit?: (room: string, event: string, data: unknown) => void | Promise<void>,
 ) {
   const trip = await verifyTripParticipation(tripId, currentUser);
 
@@ -63,7 +64,7 @@ export async function createTripMilestone(
 
   const eventTime = payload.eventTime ? new Date(payload.eventTime) : new Date();
 
-  return prisma.tripMilestone.create({
+  const milestone = await prisma.tripMilestone.create({
     data: {
       tripId,
       createdById: currentUser.userId,
@@ -75,6 +76,9 @@ export async function createTripMilestone(
       notes: payload.notes,
     },
   });
+
+  await ioEmit?.(`trip:${tripId}`, "trip:milestone", milestone);
+  return milestone;
 }
 
 export async function listTripMilestones(tripId: string, currentUser: CurrentUser) {

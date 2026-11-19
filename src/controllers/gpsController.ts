@@ -2,6 +2,7 @@ import { NextFunction, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { AppError } from "../errors/AppError";
 import { createTripGpsLocation, getLastTripGpsLocation, listTripGpsLocations } from "../services/gpsService";
+import { emitToAuthorizedTripRoom } from "../socket";
 
 export async function createGpsLocationController(req: AuthRequest, res: Response, next: NextFunction) {
   try {
@@ -9,7 +10,12 @@ export async function createGpsLocationController(req: AuthRequest, res: Respons
       throw new AppError("Unauthorized", 401);
     }
 
-    const location = await createTripGpsLocation(req.params.tripId, req.body, req.user);
+    const io = (req.app as any).io;
+    const ioEmit = io
+      ? (room: string, event: string, data: unknown) =>
+          emitToAuthorizedTripRoom(io, room.slice("trip:".length), event, data)
+      : undefined;
+    const location = await createTripGpsLocation(req.params.tripId, req.body, req.user, ioEmit);
     res.status(201).json({ data: location });
   } catch (error) {
     next(error);

@@ -1,7 +1,11 @@
 import { Request, Response, NextFunction } from "express";
-import { registerUser, createJwtToken, comparePassword } from "../services/authService";
+import {
+  registerUser,
+  createJwtToken,
+  comparePassword,
+  isPublicRegistrationRole,
+} from "../services/authService";
 import { findUserByEmail, findUserById, sanitizeUser } from "../services/userService";
-import { UserRole } from "@prisma/client";
 import { AppError } from "../errors/AppError";
 import { AuthRequest } from "../middleware/authMiddleware";
 
@@ -13,8 +17,8 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       throw new AppError("Missing required registration fields", 400);
     }
 
-    if (!Object.values(UserRole).includes(role)) {
-      throw new AppError("Invalid role", 400);
+    if (!isPublicRegistrationRole(role)) {
+      throw new AppError("Invalid role for public registration", 400);
     }
 
     const user = await registerUser(email, password, fullName, role);

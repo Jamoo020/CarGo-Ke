@@ -28,25 +28,115 @@ export function validateLogin(req: Request, res: Response, next: NextFunction) {
 }
 
 export function validateTransportRequestCreation(req: Request, res: Response, next: NextFunction) {
-  const { customerId, origin, destination, vehicleDetailId } = req.body;
+  const {
+    customerId, origin, destination, pickupAddress, pickupLatitude, pickupLongitude,
+    destinationAddress, destinationLatitude, destinationLongitude, distanceMeters,
+    estimatedDurationSeconds, routePolyline, vehicleDetailId, make, model, year,
+    registrationNumber, color, engineCC, vehicleType, capacity, travelDateTime, notes,
+  } = req.body;
 
-  if (!origin || !destination || !vehicleDetailId) {
-    return next(new AppError("origin, destination, and vehicleDetailId are required", 400));
+  if (!origin || !destination) {
+    return next(new AppError("origin and destination are required", 400));
   }
 
-  if (typeof origin !== "string" || typeof destination !== "string" || typeof vehicleDetailId !== "string") {
+  if (typeof origin !== "string" || typeof destination !== "string") {
     return next(new AppError("Invalid input types for transport request", 400));
+  }
+
+  const coordinates = [pickupLatitude, pickupLongitude, destinationLatitude, destinationLongitude];
+  if (
+    typeof pickupAddress !== "string" || !pickupAddress.trim()
+    || typeof destinationAddress !== "string" || !destinationAddress.trim()
+    || coordinates.some((coordinate) => typeof coordinate !== "number" || !Number.isFinite(coordinate))
+  ) {
+    return next(new AppError("Verified pickup and destination addresses and coordinates are required", 400));
+  }
+  if (/approximate city centre/i.test(pickupAddress) || /approximate city centre/i.test(destinationAddress)) {
+    return next(new AppError("Approximate development locations cannot be used for transport requests", 400));
+  }
+
+  const isInKenya = (latitude: number, longitude: number) =>
+    latitude >= -5.2 && latitude <= 5.2 && longitude >= 33.5 && longitude <= 42.5;
+  if (!isInKenya(pickupLatitude, pickupLongitude) || !isInKenya(destinationLatitude, destinationLongitude)) {
+    return next(new AppError("Pickup and destination must be valid locations in Kenya", 400));
+  }
+
+  const latitudeDifference = (pickupLatitude - destinationLatitude) * 111_320;
+  const meanLatitude = ((pickupLatitude + destinationLatitude) / 2) * Math.PI / 180;
+  const longitudeDifference = (pickupLongitude - destinationLongitude) * 111_320 * Math.cos(meanLatitude);
+  if (Math.hypot(latitudeDifference, longitudeDifference) < 20) {
+    return next(new AppError("Pickup and destination must be at least 20 metres apart", 400));
+  }
+
+  if (distanceMeters !== undefined && (!Number.isInteger(distanceMeters) || distanceMeters <= 0)) {
+    return next(new AppError("distanceMeters must be a positive integer when provided", 400));
+  }
+  if (estimatedDurationSeconds !== undefined && (!Number.isInteger(estimatedDurationSeconds) || estimatedDurationSeconds <= 0)) {
+    return next(new AppError("estimatedDurationSeconds must be a positive integer when provided", 400));
+  }
+  if (routePolyline !== undefined && (typeof routePolyline !== "string" || routePolyline.length > 100_000)) {
+    return next(new AppError("routePolyline must be a valid string when provided", 400));
+  }
+  const routeData = [distanceMeters, estimatedDurationSeconds, routePolyline];
+  if (routeData.some((value) => value !== undefined) && routeData.some((value) => value === undefined)) {
+    return next(new AppError("Driving route distance, duration, and polyline must be provided together", 400));
+  }
+
+  const hasLegacyVehicleId = typeof vehicleDetailId === "string" && vehicleDetailId.trim().length > 0;
+  const hasVehicleFields =
+    typeof make === "string" && make.trim().length > 0 &&
+    typeof model === "string" && model.trim().length > 0 &&
+    typeof registrationNumber === "string" && registrationNumber.trim().length > 0 &&
+    year !== undefined && year !== null && Number.isFinite(Number(year));
+
+  if (!hasLegacyVehicleId && !hasVehicleFields) {
+    return next(new AppError("vehicle details are required: provide make, model, year, and registrationNumber", 400));
   }
 
   if (customerId && typeof customerId !== "string") {
     return next(new AppError("Invalid customerId", 400));
   }
 
+  if (color !== undefined && typeof color !== "string") {
+    return next(new AppError("color must be a string when provided", 400));
+  }
+
+  if (year !== undefined && year !== null && !Number.isFinite(Number(year))) {
+    return next(new AppError("year must be a valid number", 400));
+  }
+
+  if (travelDateTime !== undefined && travelDateTime !== null) {
+    const parsed = new Date(travelDateTime);
+    if (Number.isNaN(parsed.getTime())) {
+      return next(new AppError("travelDateTime must be a valid ISO date string", 400));
+    }
+  }
+
+  if (engineCC !== undefined && engineCC !== null) {
+    if (typeof engineCC !== "number" || Number.isNaN(engineCC) || engineCC <= 0) {
+      return next(new AppError("engineCC must be a positive number", 400));
+    }
+  }
+
+  if (vehicleType !== undefined && typeof vehicleType !== "string") {
+    return next(new AppError("vehicleType must be a string when provided", 400));
+  }
+
+  if (capacity !== undefined && capacity !== null) {
+    if (!Number.isInteger(Number(capacity)) || Number(capacity) <= 0) {
+      return next(new AppError("capacity must be a positive integer", 400));
+    }
+  }
+
+  if (notes !== undefined && typeof notes !== "string") {
+    return next(new AppError("notes must be a string when provided", 400));
+  }
+
   next();
 }
 
 export function validateCreateDriverQuote(req: Request, res: Response, next: NextFunction) {
-  const { amount, message } = req.body;
+  const { amount, fuelBudget, message } = req.body;
 
   if (amount === undefined || amount === null) {
     return next(new AppError("amount is required", 400));
@@ -54,6 +144,12 @@ export function validateCreateDriverQuote(req: Request, res: Response, next: Nex
 
   if (typeof amount !== "number" || Number.isNaN(amount) || amount <= 0) {
     return next(new AppError("amount must be a positive number", 400));
+  }
+
+  if (fuelBudget !== undefined && fuelBudget !== null) {
+    if (typeof fuelBudget !== "number" || Number.isNaN(fuelBudget) || fuelBudget < 0) {
+      return next(new AppError("fuelBudget must be a non-negative number", 400));
+    }
   }
 
   if (message !== undefined && typeof message !== "string") {

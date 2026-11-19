@@ -14,6 +14,7 @@ export async function createTripGpsLocation(
   tripId: string,
   payload: CreateGpsLocationPayload,
   currentUser: CurrentUser,
+  ioEmit?: (room: string, event: string, data: any) => void | Promise<void>,
 ) {
   const trip = await verifyTripParticipation(tripId, currentUser);
 
@@ -48,7 +49,7 @@ export async function createTripGpsLocation(
     throw new AppError("timestamp must be a valid ISO date string", 400);
   }
 
-  return prisma.gpsLocation.create({
+  const gpsLocation = await prisma.gpsLocation.create({
     data: {
       tripId,
       driverId: driver.id,
@@ -58,6 +59,19 @@ export async function createTripGpsLocation(
       accuracy: payload.accuracy,
     },
   });
+
+  // Emit socket event to trip room
+  if (ioEmit) {
+    await ioEmit(`trip:${tripId}`, "driver:location", {
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      timestamp: timestamp.toISOString(),
+      accuracy: payload.accuracy,
+      driverId: driver.id,
+    });
+  }
+
+  return gpsLocation;
 }
 
 export async function listTripGpsLocations(tripId: string, currentUser: CurrentUser) {

@@ -64,6 +64,17 @@ export async function cancelTrip(
     throw new AppError("Trip cancellation has already been recorded", 409);
   }
 
+  const tripUpdate = await tx.trip.updateMany({
+    where: { id: tripId, status: trip.status },
+    data: {
+      status: TripStatus.CANCELLED,
+      refundAmount: 0,
+    },
+  });
+  if (tripUpdate.count !== 1) {
+    throw new AppError("Trip status changed while applying cancellation; retry the request", 409);
+  }
+
   const cancellation = await tx.cancellation.create({
     data: {
       tripId,
@@ -72,14 +83,6 @@ export async function cancelTrip(
       reason,
       statusBefore: trip.status,
       statusAfter: TripStatus.CANCELLED,
-      refundAmount: 0,
-    },
-  });
-
-  await tx.trip.update({
-    where: { id: tripId },
-    data: {
-      status: TripStatus.CANCELLED,
       refundAmount: 0,
     },
   });

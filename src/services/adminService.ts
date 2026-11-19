@@ -328,7 +328,21 @@ export async function getTripAdmin(tripId: string, currentUser?: AdminActor) {
 
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
-    include: { transportRequest: true, customer: true, driver: { include: { user: true } }, payment: true, dispute: true },
+    include: {
+      transportRequest: { include: { vehicleDetail: true } },
+      customer: { select: { fullName: true } },
+      driver: { include: { user: { select: { fullName: true } } } },
+      payment: true,
+      dispute: true,
+      tripWallet: {
+        select: {
+          driverCompensationReleased: true,
+          driverCompensationRemaining: true,
+          releaseAccountingVersion: true,
+          fuelAccountingStatus: true,
+        },
+      },
+    },
   });
 
   if (!trip) {

@@ -11,16 +11,51 @@ import inspectionRoutes from "./routes/inspectionRoutes";
 import trackingRoutes from "./routes/trackingRoutes";
 import disputeRoutes from "./routes/disputeRoutes";
 import adminRoutes from "./routes/adminRoutes";
+import devRoutes from "./routes/devRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
 app.set("trust proxy", 1);
 
-app.use(express.json({
-  verify: (req, _res, buf) => {
-    (req as any).rawBody = buf.toString("utf8");
-  },
-}));
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+
+  next();
+});
+
+// Custom JSON parser middleware that skips multipart requests
+app.use((req, res, next) => {
+  const contentType = req.get("content-type") || "";
+  if (contentType.includes("multipart/form-data")) {
+    console.log(`[DEBUG] Skipping JSON parser for multipart: ${req.method} ${req.path}`);
+    return next();
+  }
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as any).rawBody = buf.toString("utf8");
+    },
+  })(req, res, next);
+});
+// Temporary debug middleware: log transport-requests incoming calls and auth header presence
+app.use((req, _res, next) => {
+  try {
+    if (req.path && req.path.startsWith("/api/transport-requests")) {
+      const hasAuth = Boolean(req.headers.authorization);
+      console.log(`[DEBUG] Incoming ${req.method} ${req.path} - Authorization present: ${hasAuth}`);
+    }
+  } catch (e) {
+    // ignore
+  }
+  next();
+});
 app.use("/api/auth", authRoutes);
 app.use("/api/transport-requests", transportRequestRoutes);
 app.use("/api", quoteRoutes);

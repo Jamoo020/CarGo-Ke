@@ -14,6 +14,26 @@ interface CreateInspectionPayload {
   handoverConfirmed: boolean;
 }
 
+function validateInspectionPhotoUrl(tripId: string, photoUrl: string): string {
+  const normalized = photoUrl.trim();
+  const expectedPrefix = `/api/trips/${tripId}/inspections/photos/`;
+
+  if (!normalized.startsWith("/")) {
+    throw new AppError("Inspection photo URL must be a local trip-scoped path", 400);
+  }
+
+  if (!normalized.startsWith(expectedPrefix)) {
+    throw new AppError("Inspection photo URL does not belong to this trip", 400);
+  }
+
+  const fileName = normalized.slice(expectedPrefix.length);
+  if (!fileName || fileName.includes("/") || fileName.includes("\\") || fileName.includes("..")) {
+    throw new AppError("Inspection photo URL contains an invalid file name", 400);
+  }
+
+  return normalized;
+}
+
 export async function createTripInspection(tripId: string, payload: CreateInspectionPayload, currentUser: CurrentUser) {
   const trip = await verifyTripParticipation(tripId, currentUser);
 
@@ -51,13 +71,21 @@ export async function createTripInspection(tripId: string, payload: CreateInspec
     throw new AppError("Delivery inspections may only be submitted when the trip is in DELIVERY_PENDING status", 400);
   }
 
+  const cleanedPhotoUrls = payload.photoUrls
+    .filter((url) => typeof url === "string" && url.trim().length > 0)
+    .map((url) => validateInspectionPhotoUrl(tripId, url));
+
+  if (cleanedPhotoUrls.length === 0) {
+    throw new AppError("At least one valid photo URL is required for an inspection", 400);
+  }
+
   return prisma.$transaction(async (tx) => {
     const inspection = await tx.inspection.create({
       data: {
         tripId,
         driverId: driver.id,
         type: payload.type,
-        photoUrls: payload.photoUrls,
+        photoUrls: cleanedPhotoUrls,
         odometer: payload.odometer,
         fuelLevel: payload.fuelLevel,
         vehicleCondition: payload.vehicleCondition,
@@ -69,7 +97,7 @@ export async function createTripInspection(tripId: string, payload: CreateInspec
 
     if (payload.type === InspectionType.PICKUP) {
       const { transitionTripStatus } = await import("./tripService");
-      await transitionTripStatus(tripId, "completePickupInspection", currentUser, tx);
+      await transitionTripStatus(tripId, "completePickupInspection", currentUser, undefined, tx);
     }
 
     return inspection;

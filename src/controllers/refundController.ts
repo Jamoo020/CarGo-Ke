@@ -2,6 +2,7 @@ import { NextFunction, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { createRefund } from "../services/refundService";
 import { AppError } from "../errors/AppError";
+import { RefundStatus } from "@prisma/client";
 
 export async function createRefundController(req: AuthRequest, res: Response, next: NextFunction) {
   try {
@@ -13,7 +14,7 @@ export async function createRefundController(req: AuthRequest, res: Response, ne
     const { amount, reason } = req.body;
 
     const refund = await createRefund(tripId, { amount, reason }, req.user);
-    res.status(201).json({ data: refund });
+    res.status(refund.status === RefundStatus.PENDING ? 202 : 201).json({ data: refund });
   } catch (error) {
     next(error);
   }

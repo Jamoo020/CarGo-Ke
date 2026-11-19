@@ -10,13 +10,23 @@ import { AppError } from "../errors/AppError";
 
 export async function createRequest(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const { customerId, origin, destination, vehicleDetailId } = req.body;
+    const {
+      customerId, origin, destination, pickupAddress, pickupLatitude, pickupLongitude,
+      destinationAddress, destinationLatitude, destinationLongitude, distanceMeters,
+      estimatedDurationSeconds, routePolyline, vehicleDetailId, make, model, year,
+      registrationNumber, color, engineCC, vehicleType, capacity, travelDateTime, notes,
+    } = req.body;
     if (!req.user) {
       throw new AppError("Unauthorized", 401);
     }
 
     const request = await createTransportRequest(
-      { customerId, origin, destination, vehicleDetailId },
+      {
+        customerId, origin, destination, pickupAddress, pickupLatitude, pickupLongitude,
+        destinationAddress, destinationLatitude, destinationLongitude, distanceMeters,
+        estimatedDurationSeconds, routePolyline, vehicleDetailId, make, model, year,
+        registrationNumber, color, engineCC, vehicleType, capacity, travelDateTime, notes,
+      },
       req.user,
     );
 

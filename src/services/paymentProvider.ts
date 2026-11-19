@@ -8,8 +8,7 @@ export function verifyPaymentWebhookSignature(signature: string | undefined, raw
   const secret = getPaymentWebhookSecret();
 
   if (!secret) {
-    // In non-production environments, webhook signature validation may be unavailable.
-    return;
+    throw new AppError("Payment webhook verification is not configured", 503);
   }
 
   if (!rawBody) {
@@ -28,7 +27,17 @@ export function verifyPaymentWebhookSignature(signature: string | undefined, raw
     throw new AppError("Invalid payment webhook signature", 401);
   }
 
-  if (!crypto.timingSafeEqual(bufferSignature as any, bufferExpected as any)) {
+  const signatureView = new DataView(
+    bufferSignature.buffer,
+    bufferSignature.byteOffset,
+    bufferSignature.byteLength,
+  );
+  const expectedView = new DataView(
+    bufferExpected.buffer,
+    bufferExpected.byteOffset,
+    bufferExpected.byteLength,
+  );
+  if (!crypto.timingSafeEqual(signatureView, expectedView)) {
     throw new AppError("Invalid payment webhook signature", 401);
   }
 }

@@ -25,13 +25,18 @@ export async function isActiveRepresentativeForCustomer(
   return Boolean(link);
 }
 
-export async function getDriverForCurrentUser(currentUser: CurrentUser, tx?: Prisma.TransactionClient) {
+export async function getDriverProfileForCurrentUser(currentUser: CurrentUser, tx?: Prisma.TransactionClient) {
   const client = tx ?? prisma;
   const driver = await client.driver.findUnique({ where: { userId: currentUser.userId } });
   if (!driver) {
     throw new AppError("Driver profile not found", 404);
   }
-  if (!driver.verified) {
+  return driver;
+}
+
+export async function getDriverForCurrentUser(currentUser: CurrentUser, tx?: Prisma.TransactionClient) {
+  const driver = await getDriverProfileForCurrentUser(currentUser, tx);
+  if (!driver.verified || driver.verificationStatus !== "APPROVED") {
     throw new AppError("Driver is not authorized for trip actions", 403);
   }
   return driver;

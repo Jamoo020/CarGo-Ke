@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { AppError } from "../errors/AppError";
 import { TripStatus, UserRole, PaymentStatus } from "@prisma/client";
@@ -92,21 +93,19 @@ function isValidPaymentTransition(currentStatus: PaymentStatus, newStatus: Payme
   return false;
 }
 
-async function findPaymentForProviderPayload(payload: ProviderPaymentCallbackPayload) {
-  if (payload.paymentId) {
-    return prisma.payment.findUnique({ where: { id: payload.paymentId }, include: { trip: true } });
+export function resolveMockPaymentStatus(providerReference?: string): PaymentStatus {
+  const normalized = (providerReference ?? "mock_success").trim().toLowerCase();
+
+  if (normalized.includes("fail") || normalized.includes("error") || normalized.includes("decline")) {
+    return PaymentStatus.FAILED;
   }
 
-  if (payload.providerReference) {
-    return prisma.payment.findUnique({ where: { providerReference: payload.providerReference }, include: { trip: true } });
-  }
-
-  return null;
+  return PaymentStatus.CONFIRMED;
 }
 
 async function finalizePaymentStatus(
-  tx: any,
-  payment: any,
+  tx: Prisma.TransactionClient,
+  payment: Prisma.PaymentGetPayload<{ include: { trip: true } }>,
   status: PaymentStatus,
   callbackReference?: string,
   allowSameStatus = false,
@@ -127,13 +126,23 @@ async function finalizePaymentStatus(
   }
 
   if (status === PaymentStatus.FAILED) {
-    return tx.payment.update({
-      where: { id: payment.id },
+    const update = await tx.payment.updateMany({
+      where: { id: payment.id, status: PaymentStatus.PENDING },
       data: {
         status: PaymentStatus.FAILED,
         providerCallbackReference: callbackReference ?? payment.providerCallbackReference,
       },
     });
+    if (update.count !== 1) {
+      const current = await tx.payment.findUnique({ where: { id: payment.id }, include: { trip: true } });
+      if (allowSameStatus && current?.status === PaymentStatus.FAILED) {
+        return current;
+      }
+      throw new AppError("Payment status changed while processing the callback", 409);
+    }
+    const updated = await tx.payment.findUnique({ where: { id: payment.id }, include: { trip: true } });
+    if (!updated) throw new AppError("Payment not found", 404);
+    return updated;
   }
 
   if (status === PaymentStatus.CONFIRMED) {
@@ -141,25 +150,37 @@ async function finalizePaymentStatus(
       throw new AppError("Trip is not awaiting payment confirmation", 400);
     }
 
-    const updatedPayment = await tx.payment.update({
-      where: { id: payment.id },
+    const paymentUpdate = await tx.payment.updateMany({
+      where: { id: payment.id, status: PaymentStatus.PENDING },
       data: {
         status: PaymentStatus.CONFIRMED,
         providerCallbackReference: callbackReference ?? payment.providerCallbackReference,
       },
     });
+    if (paymentUpdate.count !== 1) {
+      const current = await tx.payment.findUnique({ where: { id: payment.id }, include: { trip: true } });
+      if (allowSameStatus && current?.status === PaymentStatus.CONFIRMED && current.trip.status === TripStatus.BOOKED) {
+        return current;
+      }
+      throw new AppError("Payment status changed while processing the callback", 409);
+    }
 
-    await tx.trip.update({
-      where: { id: payment.tripId },
+    const tripUpdate = await tx.trip.updateMany({
+      where: { id: payment.tripId, status: TripStatus.PAYMENT_PENDING },
       data: { status: TripStatus.BOOKED },
     });
+    if (tripUpdate.count !== 1) {
+      throw new AppError("Trip is no longer awaiting payment confirmation", 409);
+    }
 
     await tx.transportRequest.update({
       where: { id: payment.trip.transportRequestId },
       data: { status: TripStatus.BOOKED },
     });
 
-    await initializeTripWalletTx(tx, updatedPayment.id);
+    await initializeTripWalletTx(tx, payment.id);
+    const updatedPayment = await tx.payment.findUnique({ where: { id: payment.id }, include: { trip: true } });
+    if (!updatedPayment) throw new AppError("Payment not found", 404);
     return updatedPayment;
   }
 
@@ -168,8 +189,17 @@ async function finalizePaymentStatus(
 
 export async function processProviderPaymentCallback(
   payload: ProviderPaymentCallbackPayload,
-  rawBody?: string,
 ) {
+  if (
+    !payload ||
+    typeof payload.providerReference !== "string" ||
+    !payload.providerReference.trim() ||
+    typeof payload.status !== "string" ||
+    typeof payload.currency !== "string"
+  ) {
+    throw new AppError("Invalid payment callback payload", 400);
+  }
+
   if (payload.currency !== config.paymentProviderCurrency) {
     throw new AppError("Invalid payment currency", 400);
   }
@@ -183,16 +213,23 @@ export async function processProviderPaymentCallback(
     throw new AppError("Unsupported payment status", 400);
   }
 
-  const payment = await findPaymentForProviderPayload(payload);
+  const payment = await prisma.payment.findUnique({
+    where: { providerReference: payload.providerReference },
+    include: { trip: true },
+  });
   if (!payment) {
     throw new AppError("Payment not found", 404);
+  }
+
+  if (payload.paymentId && payload.paymentId !== payment.id) {
+    throw new AppError("Payment reference mismatch", 400);
   }
 
   if (payload.tripId && payload.tripId !== payment.tripId) {
     throw new AppError("Payment trip mismatch", 400);
   }
 
-  if (payload.providerReference && payment.providerReference && payload.providerReference !== payment.providerReference) {
+  if (payload.providerReference !== payment.providerReference) {
     throw new AppError("Provider reference mismatch", 400);
   }
 
@@ -201,12 +238,25 @@ export async function processProviderPaymentCallback(
   }
 
   if (payment.status === status) {
+    if (status === PaymentStatus.CONFIRMED && payment.trip.status !== TripStatus.BOOKED) {
+      throw new AppError("Trip status mismatch for already confirmed payment", 409);
+    }
     return payment;
   }
 
-  return prisma.$transaction(async (tx) => {
-    return finalizePaymentStatus(tx, payment, status, payload.providerCallbackReference, true);
-  });
+  try {
+    return await prisma.$transaction(async (tx) =>
+      finalizePaymentStatus(tx, payment, status, payload.providerCallbackReference, true),
+    );
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2002" || error.code === "P2034")
+    ) {
+      throw new AppError("Payment callback was already processed or conflicted; retry safely", 409);
+    }
+    throw error;
+  }
 }
 
 export async function createTripPayment(tripId: string, payload: { providerReference?: string }, currentUser: CurrentUser) {
@@ -221,12 +271,85 @@ export async function createTripPayment(tripId: string, payload: { providerRefer
   });
 
   if (existingPayment) {
+    // Same trip already has a payment row. Treat this as an idempotent retry instead of a hard conflict
+    // when the user is simply revisiting the payment step or a stale payment record still exists.
+    if (payload.providerReference && existingPayment.providerReference === payload.providerReference) {
+      return existingPayment;
+    }
+
+    // If the payment is still pending or failed, allow the same customer to safely re-use the existing record
+    // instead of incorrectly surfacing a false duplicate-payment error.
+    if (
+      existingPayment.status === PaymentStatus.PENDING ||
+      existingPayment.status === PaymentStatus.FAILED
+    ) {
+      return existingPayment;
+    }
+
     throw new AppError("Payment already exists for this trip", 409);
   }
 
   const customerId = trip.customerId;
   if (!customerId) {
     throw new AppError("Trip does not have an associated customer", 500);
+  }
+
+  const mockModeEnabled = config.paymentMode === "mock" && config.environment !== "production";
+
+  if (mockModeEnabled) {
+    const mockStatus = resolveMockPaymentStatus(payload.providerReference);
+
+    // Generate a unique provider reference for mock mode
+    const providerReference = payload.providerReference ? `${payload.providerReference}_${Date.now()}` : `mock_${Date.now()}`;
+
+    return prisma.$transaction(async (tx) => {
+      const createdPayment = await tx.payment.create({
+        data: {
+          tripId,
+          customerId,
+          amount: trip.bookingAmount,
+          status: PaymentStatus.PENDING,
+          providerReference,
+        },
+      });
+
+      const paymentWithTrip = await tx.payment.findUnique({
+        where: { id: createdPayment.id },
+        include: { trip: true },
+      });
+
+      if (!paymentWithTrip) {
+        throw new AppError("Payment was not created successfully", 500);
+      }
+
+      return finalizePaymentStatus(
+        tx,
+        paymentWithTrip,
+        mockStatus,
+        `mock_${createdPayment.id}_${mockStatus.toLowerCase()}`,
+      );
+    });
+  }
+
+  // Live mode: handle idempotent payment creation with providerReference uniqueness
+  if (payload.providerReference) {
+    // Check if a payment with this providerReference already exists
+    const existingPaymentByRef = await prisma.payment.findUnique({
+      where: { providerReference: payload.providerReference },
+    });
+
+    if (existingPaymentByRef) {
+      // If it belongs to the same trip, return it (idempotent)
+      if (existingPaymentByRef.tripId === tripId) {
+        return existingPaymentByRef;
+      }
+
+      // If it belongs to a different trip/customer, reject as conflict
+      throw new AppError(
+        "Payment reference already exists for a different transaction",
+        409,
+      );
+    }
   }
 
   return prisma.payment.create({
@@ -241,8 +364,11 @@ export async function createTripPayment(tripId: string, payload: { providerRefer
 }
 
 export async function confirmTripPayment(paymentId: string, payload: { providerCallbackReference?: string }, currentUser: CurrentUser) {
-  if (config.environment === "production" && currentUser.role !== UserRole.ADMIN) {
-    throw new AppError("Manual payment confirmation is disabled in production", 403);
+  if (config.environment === "production" || config.paymentMode !== "mock") {
+    throw new AppError(
+      "Manual payment confirmation is available only in explicitly enabled mock mode outside production",
+      403,
+    );
   }
 
   const payment = await prisma.payment.findUnique({

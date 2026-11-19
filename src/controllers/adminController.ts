@@ -1,4 +1,5 @@
 import { NextFunction, Response } from "express";
+import { Server } from "socket.io";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { AppError } from "../errors/AppError";
 import {
@@ -22,6 +23,8 @@ import {
   updateUserAccountStatusAdmin,
 } from "../services/adminService";
 import { getDisputeById, updateDispute } from "../services/disputeService";
+import { AccountStatus } from "@prisma/client";
+import { disconnectUserSockets } from "../socket";
 
 export async function listUsersController(req: AuthRequest, res: Response, next: NextFunction) {
   try {
@@ -54,6 +57,12 @@ export async function updateUserStatusController(req: AuthRequest, res: Response
   try {
     if (!req.user) throw new AppError("Unauthorized", 401);
     const user = await updateUserAccountStatusAdmin(req.params.userId, req.body, req.user);
+    if (user.accountStatus !== AccountStatus.ACTIVE) {
+      const io = (req.app as typeof req.app & { io?: Server }).io;
+      if (io) {
+        disconnectUserSockets(io, user.id);
+      }
+    }
     res.status(200).json({ data: user });
   } catch (error) {
     next(error);

@@ -4,6 +4,13 @@ import { InspectionType, Prisma, TripStatus, UserRole } from "@prisma/client";
 import { CurrentUser, getDriverForCurrentUser, verifyTripParticipation } from "./authorizationService";
 import { cancelTrip as cancelTripRequest } from "./cancellationService";
 import { releaseDriverFundsForTripStatus } from "./walletService";
+import { confirmTripCompletionTx } from "./completionService";
+
+const TRIP_PRESENTATION_INCLUDE: Prisma.TripInclude = {
+  transportRequest: { include: { vehicleDetail: true } },
+  customer: { select: { fullName: true } },
+  driver: { include: { user: { select: { fullName: true } } } },
+};
 
 type TripTransitionDefinition = {
   from: TripStatus[];
@@ -53,7 +60,7 @@ const TRANSITION_ACTIONS: Record<
   completeTrip: {
     from: [TripStatus.DELIVERED],
     to: TripStatus.COMPLETED,
-    allowedRoles: [UserRole.CUSTOMER, UserRole.AUTHORIZED_REPRESENTATIVE, UserRole.ADMIN],
+    allowedRoles: [UserRole.CUSTOMER, UserRole.AUTHORIZED_REPRESENTATIVE],
   },
   cancelTrip: {
     from: [
@@ -88,13 +95,25 @@ const TRANSITION_ACTIONS: Record<
 
 export type TripTransitionAction = keyof typeof TRANSITION_ACTIONS;
 
+function isConcurrentDatabaseWrite(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error.code === "P2002" || error.code === "P2034")
+  );
+}
+
 export async function listTrips(currentUser: CurrentUser) {
   if (currentUser.role === UserRole.ADMIN) {
-    return prisma.trip.findMany({ include: { transportRequest: true } });
+    return prisma.trip.findMany({ include: TRIP_PRESENTATION_INCLUDE });
   }
 
   if (currentUser.role === UserRole.CUSTOMER) {
-    return prisma.trip.findMany({ where: { customerId: currentUser.userId }, include: { transportRequest: true } });
+    return prisma.trip.findMany({
+      where: { customerId: currentUser.userId },
+      include: TRIP_PRESENTATION_INCLUDE,
+    });
   }
 
   if (currentUser.role === UserRole.AUTHORIZED_REPRESENTATIVE) {
@@ -106,19 +125,33 @@ export async function listTrips(currentUser: CurrentUser) {
     if (customerIds.length === 0) {
       return [];
     }
-    return prisma.trip.findMany({ where: { customerId: { in: customerIds } }, include: { transportRequest: true } });
+    return prisma.trip.findMany({
+      where: { customerId: { in: customerIds } },
+      include: TRIP_PRESENTATION_INCLUDE,
+    });
   }
 
   if (currentUser.role === UserRole.DRIVER) {
     const driver = await getDriverForCurrentUser(currentUser);
-    return prisma.trip.findMany({ where: { driverId: driver.id }, include: { transportRequest: true } });
+    return prisma.trip.findMany({
+      where: { driverId: driver.id },
+      include: TRIP_PRESENTATION_INCLUDE,
+    });
   }
 
   throw new AppError("Unauthorized", 401);
 }
 
 export async function getTripById(tripId: string, currentUser: CurrentUser) {
-  return verifyTripParticipation(tripId, currentUser);
+  await verifyTripParticipation(tripId, currentUser);
+  const trip = await prisma.trip.findUnique({
+    where: { id: tripId },
+    include: TRIP_PRESENTATION_INCLUDE,
+  });
+  if (!trip) {
+    throw new AppError("Trip not found", 404);
+  }
+  return trip;
 }
 
 export async function transitionTripStatus(
@@ -159,6 +192,40 @@ export async function transitionTripStatus(
   }
 
   const executeTransition = async (executor: Prisma.TransactionClient) => {
+    if (action === "completeTrip") {
+      return confirmTripCompletionTx(executor, tripId, currentUser);
+    }
+
+    if (action === "completePickupInspection") {
+      const existingPickupInspection = await executor.inspection.findUnique({
+        where: {
+          tripId_type: {
+            tripId,
+            type: InspectionType.PICKUP,
+          },
+        },
+      });
+
+      if (!existingPickupInspection) {
+        throw new AppError("Pickup inspection must be completed before requesting trip start.", 400);
+      }
+    }
+
+    if (action === "requestTripStart") {
+      const existingPickupInspection = await executor.inspection.findUnique({
+        where: {
+          tripId_type: {
+            tripId,
+            type: InspectionType.PICKUP,
+          },
+        },
+      });
+
+      if (!existingPickupInspection) {
+        throw new AppError("Pickup inspection must be completed before requesting trip start.", 400);
+      }
+    }
+
     if (action === "confirmDelivery") {
       const existingDeliveryInspection = await executor.inspection.findUnique({
         where: {
@@ -174,22 +241,31 @@ export async function transitionTripStatus(
       }
     }
 
-    const updated = await executor.trip.update({
-      where: { id: tripId },
+    const tripUpdate = await executor.trip.updateMany({
+      where: { id: tripId, status: trip.status },
       data: { status: transition.to },
     });
+    if (tripUpdate.count !== 1) {
+      throw new AppError("Trip status changed while applying this transition; retry the request", 409);
+    }
+
+    const updated = await executor.trip.findUnique({ where: { id: tripId } });
+    if (!updated) {
+      throw new AppError("Trip not found", 404);
+    }
 
     await executor.transportRequest.update({
       where: { id: trip.transportRequestId },
       data: { status: transition.to },
     });
 
-    if (transition.to === TripStatus.TRIP_ACTIVE || transition.to === TripStatus.COMPLETED) {
+    if (transition.to === TripStatus.TRIP_ACTIVE) {
       await releaseDriverFundsForTripStatus(executor, {
         id: updated.id,
         driverId: updated.driverId,
         status: updated.status,
         driverFee: updated.driverFee,
+        bookingAmount: updated.bookingAmount,
         driverAmountReleased: updated.driverAmountReleased,
         driverAmountRemaining: updated.driverAmountRemaining,
       });
@@ -199,10 +275,24 @@ export async function transitionTripStatus(
   };
 
   if (tx) {
-    return executeTransition(tx);
+    try {
+      return await executeTransition(tx);
+    } catch (error) {
+      if (isConcurrentDatabaseWrite(error)) {
+        throw new AppError("Trip or wallet state changed concurrently; retry the transition", 409);
+      }
+      throw error;
+    }
   }
 
-  return prisma.$transaction(async (transaction) => executeTransition(transaction));
+  try {
+    return await prisma.$transaction(async (transaction) => executeTransition(transaction));
+  } catch (error) {
+    if (isConcurrentDatabaseWrite(error)) {
+      throw new AppError("Trip or wallet state changed concurrently; retry the transition", 409);
+    }
+    throw error;
+  }
 }
 
 export function getAllowedTripTransitionActions() {

@@ -10,6 +10,10 @@ import {
 import { AppError } from "../errors/AppError";
 import { verifyPaymentWebhookSignature, getPaymentWebhookPayloadRaw, PAYMENT_WEBHOOK_SIGNATURE_HEADER } from "../services/paymentProvider";
 
+interface RawBodyAuthRequest extends AuthRequest {
+  rawBody?: string;
+}
+
 export async function createPayment(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) {
@@ -42,14 +46,17 @@ export async function confirmPayment(req: AuthRequest, res: Response, next: Next
   }
 }
 
-export async function paymentWebhook(req: AuthRequest, res: Response, next: NextFunction) {
+export async function paymentWebhook(req: RawBodyAuthRequest, res: Response, next: NextFunction) {
   try {
     const signature = req.header(PAYMENT_WEBHOOK_SIGNATURE_HEADER) ?? undefined;
-    const rawBody = getPaymentWebhookPayloadRaw((req as any).rawBody ?? "");
+    if (typeof req.rawBody !== "string" || !req.rawBody) {
+      throw new AppError("Missing webhook payload", 400);
+    }
+    const rawBody = getPaymentWebhookPayloadRaw(req.rawBody);
 
     verifyPaymentWebhookSignature(signature, rawBody);
 
-    const payment = await processProviderPaymentCallback(req.body, rawBody);
+    const payment = await processProviderPaymentCallback(req.body);
     res.status(200).json({ data: payment });
   } catch (error) {
     next(error);

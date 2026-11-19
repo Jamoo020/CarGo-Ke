@@ -15,10 +15,10 @@ export async function createQuote(req: AuthRequest, res: Response, next: NextFun
       throw new AppError("Unauthorized", 401);
     }
 
-    const { amount, message } = req.body;
+    const { amount, fuelBudget, message } = req.body;
     const { transportRequestId } = req.params;
 
-    const quote = await createDriverQuote(transportRequestId, { amount, message }, req.user);
+    const quote = await createDriverQuote(transportRequestId, { amount, fuelBudget, message }, req.user);
     res.status(201).json({ data: quote });
   } catch (error) {
     next(error);
