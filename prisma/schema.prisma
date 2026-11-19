@@ -30,6 +30,8 @@ model User {
   representativeLinks         CustomerRepresentative[] @relation("RepresentativeLinks")
   representativeOf            CustomerRepresentative[] @relation("CustomerLinks")
   createdMilestones           TripMilestone[]
+  driverCompletionConfirmations   Trip[]               @relation("DriverCompletionConfirmedBy")
+  customerCompletionConfirmations Trip[]               @relation("CustomerCompletionConfirmedBy")
 }
 
 enum UserRole {
@@ -144,6 +146,9 @@ model VehicleDetail {
   year               Int
   registrationNumber String
   color              String?
+  engineCC           Int?
+  vehicleType        String?
+  capacity           Int?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   transportRequests  TransportRequest[]
@@ -162,6 +167,17 @@ model TransportRequest {
   vehicleDetailId            String
   origin                     String
   destination                String
+  travelDateTime             DateTime?
+  notes                      String?
+  pickupAddress              String?
+  pickupLatitude             Float?
+  pickupLongitude            Float?
+  destinationAddress         String?
+  destinationLatitude        Float?
+  destinationLongitude       Float?
+  distanceMeters             Int?
+  estimatedDurationSeconds   Int?
+  routePolyline              String?
   status                     TripStatus    @default(REQUESTED)
   createdAt                  DateTime      @default(now())
   updatedAt                  DateTime      @updatedAt
@@ -195,6 +211,7 @@ model DriverQuote {
   driver             Driver           @relation(fields: [driverId], references: [id])
   driverId           String
   amount             Float
+  fuelBudget         Float            @default(0)
   message            String?
   status             String           @default("PENDING")
   createdAt          DateTime         @default(now())
@@ -220,6 +237,12 @@ model Trip {
   carGoFee                   Float?
   driverAmountReleased       Float            @default(0)
   driverAmountRemaining      Float            @default(0)
+  driverCompletionConfirmedAt   DateTime?
+  driverCompletionConfirmedById String?
+  customerCompletionConfirmedAt DateTime?
+  customerCompletionConfirmedById String?
+  driverCompletionConfirmedBy User?            @relation("DriverCompletionConfirmedBy", fields: [driverCompletionConfirmedById], references: [id], onDelete: SetNull)
+  customerCompletionConfirmedBy User?          @relation("CustomerCompletionConfirmedBy", fields: [customerCompletionConfirmedById], references: [id], onDelete: SetNull)
   refundAmount               Float            @default(0)
   createdAt                  DateTime         @default(now())
   updatedAt                  DateTime         @updatedAt
@@ -272,6 +295,13 @@ enum MilestoneType {
   OTHER
 }
 
+enum CapacityUnit {
+  PASSENGERS
+  KG
+  TONNES
+  OTHER
+}
+
 model GpsLocation {
   id        String   @id @default(uuid())
   trip      Trip     @relation(fields: [tripId], references: [id])
@@ -318,6 +348,14 @@ model TripWallet {
   carGoFee              Float               @default(0)
   driverAmountReleased  Float               @default(0)
   driverAmountRemaining Float               @default(0)
+  driverCompensationReleased  Float          @default(0)
+  driverCompensationRemaining Float          @default(0)
+  releaseAccountingVersion    Int             @default(2)
+  fuelAllocated         Float                @default(0)
+  fuelSpent             Float                @default(0)
+  fuelPending           Float                @default(0)
+  fuelRemaining         Float                @default(0)
+  fuelAccountingStatus  String               @default("RESTRICTED")
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   transactions          WalletTransaction[]
@@ -339,6 +377,7 @@ model DriverWallet {
 
 model WalletTransaction {
   id             String                @id @default(uuid())
+  idempotencyKey String?               @unique
   tripWallet     TripWallet?           @relation(fields: [tripWalletId], references: [id])
   tripWalletId   String?
   driverWallet   DriverWallet?         @relation(fields: [driverWalletId], references: [id])
@@ -376,6 +415,7 @@ model Payment {
 
 model Refund {
   id                 String              @id @default(uuid())
+  requestKey         String?             @unique
   trip               Trip                @relation("TripRefunds", fields: [tripId], references: [id])
   tripId             String
   payment            Payment             @relation("PaymentRefunds", fields: [paymentId], references: [id])

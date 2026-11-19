@@ -2,7 +2,11 @@
 dist/
 .env
 .env.*
+!.env.example
 coverage/
 .vite/
 .DS_Store
 npm-debug.log*
+scripts/test-admin-workflow.js
+scripts/debug/
+scripts/create-dev-admin.ts
